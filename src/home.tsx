@@ -18,6 +18,12 @@ interface CropInfo {
   scaleFactor: number;
 }
 
+const VIDEO_QUALITY_BITRATES: Record<string, number> = {
+  Low: 250_000, // 0.25 Mbps - Intentionally very low to make the difference obvious
+  Medium: 2_500_000, // 2.5 Mbps
+  High: 5_000_000, // 5 Mbps
+};
+
 declare global {
   interface Window {
     electronAPI: {
@@ -80,6 +86,7 @@ export default function Home() {
   const [recordingArea, setRecordingArea] = useState("Specific Window");
   const [audioInput, setAudioInput] = useState("None");
   const [videoQuality, setVideoQuality] = useState("High");
+  const [frameRate, setFrameRate] = useState(60);
 
   useEffect(() => {
     if (view === "select-source") {
@@ -105,6 +112,10 @@ export default function Home() {
           mandatory: {
             chromeMediaSource: "desktop",
             chromeMediaSourceId: source.id,
+            frameRate: {
+              ideal: frameRate,
+              max: frameRate,
+            },
           },
         } as any,
       });
@@ -166,6 +177,7 @@ export default function Home() {
 
       mediaRecorder.current = new MediaRecorder(combinedStream.current, {
         mimeType: "video/webm; codecs=vp9",
+        videoBitsPerSecond: VIDEO_QUALITY_BITRATES[videoQuality],
       });
 
       mediaRecorder.current.ondataavailable = (event) => {
@@ -345,23 +357,35 @@ export default function Home() {
             <OptionButton
               selected={videoQuality === "High"}
               onClick={() => setVideoQuality("High")}
-              disabled
             >
               High
             </OptionButton>
             <OptionButton
               selected={videoQuality === "Medium"}
               onClick={() => setVideoQuality("Medium")}
-              disabled
             >
               Medium
             </OptionButton>
             <OptionButton
               selected={videoQuality === "Low"}
               onClick={() => setVideoQuality("Low")}
-              disabled
             >
               Low
+            </OptionButton>
+          </SettingsSection>
+
+          <SettingsSection title="Frame Rate">
+            <OptionButton
+              selected={frameRate === 60}
+              onClick={() => setFrameRate(60)}
+            >
+              60 FPS
+            </OptionButton>
+            <OptionButton
+              selected={frameRate === 30}
+              onClick={() => setFrameRate(30)}
+            >
+              30 FPS
             </OptionButton>
           </SettingsSection>
         </div>
