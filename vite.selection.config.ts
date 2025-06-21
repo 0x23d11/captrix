@@ -1,13 +1,11 @@
 import { defineConfig } from "vite";
-import path from "path";
 
 // https://vitejs.dev/config
 export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        main: path.resolve(__dirname, "index.html"),
-        selection: path.resolve(__dirname, "selection.html"),
+        selection: "selection.html",
       },
     },
   },
