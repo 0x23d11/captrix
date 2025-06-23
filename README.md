@@ -2,74 +2,39 @@
 
 Captrix is a free, open-source, cross-platform alternative to Screen.studio. Our goal is to create a powerful screen recorder that makes it easy to create beautiful, polished videos with smart, automatic editing features.
 
-This document outlines our development roadmap. We'll be building the following features step-by-step on our way to the first official launch.
+This document outlines our development roadmap, inspired by the fantastic features of Screen.studio.
 
 ---
 
 ## Feature Roadmap
 
-### Phase 1: Core Recording Engine (The MVP)
+Our goal is to build a product with the following capabilities, mirroring the powerful and user-friendly experience of Screen Studio.
 
-This phase focuses on the absolute basics of a screen recorder.
+### Core Recording
 
-1.  **Screen Capture**:
+- **High-Quality Screen Capture**: Record your entire screen, a specific application window, or a custom area.
+- **Webcam & Audio**: Overlay your webcam on your recording, and capture audio from your microphone, system audio, or both.
 
-    - Let the user select which display to record.
-    - Let the user select a specific application window to record.
-    - Basic controls: Start, Pause, and Stop recording.
-    - Save the final recording to a file (e.g., MP4).
+### The "Studio" Magic: Automatic Post-Processing
 
-2.  **Audio Recording**:
+This is where the magic happens. These features work automatically to make your recordings look amazing with minimal effort.
 
-    - Capture system audio (what the computer is playing).
-    - Capture audio from a selected microphone.
-    - Allow the user to mix or choose between system and microphone audio.
+- **Automatic Pan & Zoom**: The recorder intelligently tracks your cursor, automatically creating smooth pan and zoom animations to keep the most important action in focus.
+- **Smooth Cursor Movement**: Say goodbye to jerky mouse movements. Captrix will analyze and transform your cursor path into a smooth, cinematic glide. The cursor size can also be adjusted post-recording.
+- **Motion Blur**: Automatically applies motion blur to fast-moving elements, giving your video a professional, high-quality feel.
+- **Automatic Audio Enhancement**: Removes background noise from your microphone and normalizes audio levels for clear, consistent sound.
 
-3.  **Basic User Interface**:
-    - A main window with recording controls.
-    - A preview of what is being recorded (or the selected screen/window).
-    - A settings page to configure things like video quality, frame rate, and where to save recordings.
+### Editing & Customization
 
-### Phase 2: Enhancing the Recording
+- **Simple Video Editor**: A timeline-based editor for basic trimming, cutting, and speeding up parts of your recording.
+- **Manual Zoom Control**: Manually add, remove, or fine-tune the automatic zoom points to get the perfect result.
+- **Branding & Styling**:
+  - Add a custom wallpaper or background.
+  - Customize the window appearance with rounded borders and drop shadows.
+  - Instantly switch between horizontal (16:9) and vertical (9:16) aspect ratios, with all animations adjusting automatically.
 
-This phase adds visual flair to the raw recording, getting closer to the polished look of Screen.studio.
+### Export & Share
 
-4.  **Cursor and Interaction Highlighting**:
-
-    - Add a visual highlight around the mouse cursor to make it easy to follow.
-    - Create an animation or ripple effect when the user clicks the mouse.
-    - Allow customization of cursor effects (color, size, etc.).
-
-5.  **Webcam Overlay**:
-    - Record from the user's webcam at the same time as the screen.
-    - Display the webcam feed as an overlay on the screen recording.
-    - Allow the user to change the shape (e.g., circle, rectangle), size, and position of the webcam overlay.
-
-### Phase 3: The "Studio" - Post-Processing and Effects
-
-This is where the magic happens. These features are what set Screen.studio apart and would be the most complex to implement. They would likely operate on the video _after_ the recording is finished.
-
-6.  **Automatic Pan & Zoom**:
-
-    - Analyze the cursor's position in the recording and automatically create smooth panning and zooming motions to keep the cursor centered and in focus. The "smoothness" is key here.
-
-7.  **Video Effects**:
-
-    - **Automatic Motion Blur**: Add motion blur to fast-moving elements, especially the pan-and-zoom transitions, for a cinematic feel.
-    - **Wallpaper/Backgrounds**: Allow the user to add a custom wallpaper or background behind their screen recording.
-    - **Shadows & Borders**: Add visually appealing shadows and rounded borders to the recording window.
-
-8.  **Simple Video Editor**:
-    - A timeline view of the recorded video.
-    - Tools for basic trimming and cutting of the video.
-    - Ability to manually tweak the automatic pan & zoom points.
-
-### Phase 4: Final Touches and Usability
-
-9.  **Advanced Export Options**:
-
-    - Export videos in different formats (e.g., MP4, WebM, GIF).
-    - Allow users to choose resolution, quality, and frame rate for the final export.
-
-10. **Project Management**:
-    - Save the editing session (including cuts, effects, and pan/zoom data) as a project file so it can be re-edited later.
+- **Optimized Exports**: Export your recording with presets optimized for web, social media, or other video editors.
+- **Multiple Formats**: Save your final video as a high-quality MP4 or a highly-optimized GIF.
+- **Copy to Clipboard**: Quickly copy your video or GIF to the clipboard and paste it anywhere.
