@@ -1,4 +1,10 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+  useEffect,
+} from "react";
 
 interface EditorProps {
   videoBlob: Blob;
@@ -72,8 +78,21 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
   const [borderRadius, setBorderRadius] = useState(20);
   const [shadow, setShadow] = useState(3);
   const [backgroundColor, setBackgroundColor] = useState("#99f695");
+  const [backgroundImage, setBackgroundImage] = useState<File | null>(null);
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string>("");
   const [isExporting, setIsExporting] = useState(false);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("source");
+
+  const backgroundInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (backgroundImage) {
+      const url = URL.createObjectURL(backgroundImage);
+      setBackgroundImageUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setBackgroundImageUrl("");
+  }, [backgroundImage]);
 
   const shadowClasses: { [key: number]: string } = {
     1: "shadow-none",
@@ -90,6 +109,13 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
     const videoEl = document.createElement("video");
     videoEl.src = URL.createObjectURL(videoBlob);
     videoEl.muted = true;
+
+    let bgImage: HTMLImageElement | null = null;
+    if (backgroundImage) {
+      bgImage = document.createElement("img");
+      bgImage.src = URL.createObjectURL(backgroundImage);
+      await new Promise((resolve) => (bgImage.onload = resolve));
+    }
 
     await new Promise((resolve) => {
       videoEl.onloadedmetadata = resolve;
@@ -176,8 +202,36 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
         return;
       }
 
-      ctx.fillStyle = backgroundColor;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (bgImage) {
+        const canvasRatio = canvas.width / canvas.height;
+        const imageRatio = bgImage.width / bgImage.height;
+        let img_sx = 0,
+          img_sy = 0,
+          img_sWidth = bgImage.width,
+          img_sHeight = bgImage.height;
+
+        if (imageRatio > canvasRatio) {
+          img_sWidth = bgImage.height * canvasRatio;
+          img_sx = (bgImage.width - img_sWidth) / 2;
+        } else {
+          img_sHeight = bgImage.width / canvasRatio;
+          img_sy = (bgImage.height - img_sHeight) / 2;
+        }
+        ctx.drawImage(
+          bgImage,
+          img_sx,
+          img_sy,
+          img_sWidth,
+          img_sHeight,
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        );
+      } else {
+        ctx.fillStyle = backgroundColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
 
       ctx.save();
       ctx.beginPath();
@@ -227,7 +281,14 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
 
     videoEl.play();
     requestAnimationFrame(renderFrame);
-  }, [videoBlob, padding, borderRadius, backgroundColor, aspectRatio]);
+  }, [
+    videoBlob,
+    padding,
+    borderRadius,
+    backgroundColor,
+    aspectRatio,
+    backgroundImage,
+  ]);
 
   return (
     <div className="bg-[#111312] text-white min-h-screen font-sans flex flex-col md:flex-row">
@@ -260,14 +321,44 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
           </div>
           <div>
             <label className="text-sm text-gray-400 mb-2 block">
-              Background Color
+              Background
             </label>
-            <input
-              type="color"
-              value={backgroundColor}
-              onChange={(e) => setBackgroundColor(e.target.value)}
-              className="w-full h-10 p-1 bg-gray-700 border border-gray-600 rounded-md"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={backgroundColor}
+                onChange={(e) => {
+                  setBackgroundColor(e.target.value);
+                  setBackgroundImage(null);
+                }}
+                className="w-12 h-10 p-1 bg-gray-700 border border-gray-600 rounded-md shrink-0"
+              />
+              <input
+                type="file"
+                ref={backgroundInputRef}
+                hidden
+                accept="image/*"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    setBackgroundImage(e.target.files[0]);
+                  }
+                }}
+              />
+              <button
+                onClick={() => backgroundInputRef.current?.click()}
+                className="flex-grow text-center text-xs py-2 px-2 border border-gray-600 rounded-md hover:bg-gray-700 truncate"
+              >
+                {backgroundImage ? backgroundImage.name : "Choose Image"}
+              </button>
+              {backgroundImage && (
+                <button
+                  onClick={() => setBackgroundImage(null)}
+                  className="text-red-500 hover:text-red-400 text-lg shrink-0"
+                >
+                  &times;
+                </button>
+              )}
+            </div>
           </div>
 
           <SettingSlider
@@ -317,7 +408,12 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
 
       <main
         className="flex-grow flex justify-center items-center p-4 md:p-12 overflow-hidden"
-        style={{ backgroundColor: backgroundColor }}
+        style={{
+          backgroundColor: backgroundColor,
+          backgroundImage: `url(${backgroundImageUrl})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
       >
         <div
           className={`transition-all duration-200 ${shadowClasses[shadow]} max-w-[80vw] max-h-[80vh] flex items-center justify-center`}
