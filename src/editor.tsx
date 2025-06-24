@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 
 interface EditorProps {
   videoBlob: Blob;
@@ -38,7 +38,7 @@ const SettingSlider = ({
 );
 
 export default function Editor({ videoBlob, onExit }: EditorProps) {
-  const videoUrl = React.useMemo(() => {
+  const videoUrl = useMemo(() => {
     if (videoBlob) {
       return URL.createObjectURL(videoBlob);
     }
@@ -49,6 +49,7 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
   const [borderRadius, setBorderRadius] = useState(20);
   const [shadow, setShadow] = useState(3);
   const [backgroundColor, setBackgroundColor] = useState("#99f695");
+  const [isExporting, setIsExporting] = useState(false);
 
   const shadowClasses: { [key: number]: string } = {
     1: "shadow-none",
@@ -57,6 +58,110 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
     4: "shadow-xl",
     5: "shadow-2xl",
   };
+
+  const handleExport = useCallback(async () => {
+    if (!videoBlob) return;
+    setIsExporting(true);
+
+    const videoEl = document.createElement("video");
+    videoEl.src = URL.createObjectURL(videoBlob);
+    videoEl.muted = true;
+
+    await new Promise((resolve) => {
+      videoEl.onloadedmetadata = resolve;
+    });
+
+    const videoWidth = videoEl.videoWidth;
+    const videoHeight = videoEl.videoHeight;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = videoWidth + padding * 2;
+    canvas.height = videoHeight + padding * 2;
+    const ctx = canvas.getContext("2d");
+
+    // Get the video track from the canvas
+    const videoStream = canvas.captureStream(30);
+    const [videoTrack] = videoStream.getVideoTracks();
+
+    // Get the audio track from the original video
+    // Note: captureStream() is experimental and might not be on all browsers,
+    // but it's well-supported in modern environments like Electron.
+    const sourceStream = (videoEl as any).captureStream() as MediaStream;
+    const [audioTrack] = sourceStream.getAudioTracks();
+
+    // Combine the new video track with the original audio track
+    const combinedStream = new MediaStream([videoTrack]);
+    if (audioTrack) {
+      combinedStream.addTrack(audioTrack);
+    }
+
+    const recorder = new MediaRecorder(combinedStream, {
+      mimeType: "video/webm; codecs=vp9",
+    });
+
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    recorder.onstop = async () => {
+      const finalBlob = new Blob(chunks, { type: "video/webm" });
+      const buffer = new Uint8Array(await finalBlob.arrayBuffer());
+      window.electronAPI.saveRecording(buffer);
+      setIsExporting(false);
+      URL.revokeObjectURL(videoEl.src);
+    };
+
+    recorder.start();
+
+    const renderFrame = () => {
+      if (videoEl.paused || videoEl.ended) {
+        recorder.stop();
+        return;
+      }
+
+      ctx.fillStyle = backgroundColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      ctx.beginPath();
+      const br = Math.min(borderRadius, videoWidth / 2, videoHeight / 2);
+      ctx.moveTo(padding + br, padding);
+      ctx.lineTo(canvas.width - padding - br, padding);
+      ctx.quadraticCurveTo(
+        canvas.width - padding,
+        padding,
+        canvas.width - padding,
+        padding + br
+      );
+      ctx.lineTo(canvas.width - padding, canvas.height - padding - br);
+      ctx.quadraticCurveTo(
+        canvas.width - padding,
+        canvas.height - padding,
+        canvas.width - padding - br,
+        canvas.height - padding
+      );
+      ctx.lineTo(padding + br, canvas.height - padding);
+      ctx.quadraticCurveTo(
+        padding,
+        canvas.height - padding,
+        padding,
+        canvas.height - padding - br
+      );
+      ctx.lineTo(padding, padding + br);
+      ctx.quadraticCurveTo(padding, padding, padding + br, padding);
+      ctx.closePath();
+      ctx.clip();
+
+      ctx.drawImage(videoEl, padding, padding, videoWidth, videoHeight);
+      ctx.restore();
+
+      requestAnimationFrame(renderFrame);
+    };
+
+    videoEl.play();
+    requestAnimationFrame(renderFrame);
+  }, [videoBlob, padding, borderRadius, backgroundColor]);
 
   return (
     <div className="bg-[#111312] text-white min-h-screen font-sans flex flex-col md:flex-row">
@@ -105,8 +210,12 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
         </div>
 
         <div className="mt-auto pt-6">
-          <button className="w-full bg-brand-green text-black font-bold py-3 px-8 rounded-lg text-base">
-            Export
+          <button
+            onClick={handleExport}
+            disabled={isExporting}
+            className="w-full bg-brand-green text-black font-bold py-3 px-8 rounded-lg text-base disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isExporting ? "Exporting..." : "Export"}
           </button>
           <button
             onClick={onExit}
