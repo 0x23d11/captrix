@@ -74,7 +74,11 @@ const SettingsSection = ({
   </div>
 );
 
-export default function Home() {
+export default function Home({
+  onRecordingComplete,
+}: {
+  onRecordingComplete: (blob: Blob) => void;
+}) {
   const [sources, setSources] = useState<CapturerSource[]>([]);
   const [status, setStatus] = useState<RecordingStatus>("idle");
   const mediaRecorder = useRef<MediaRecorder | null>(null);
@@ -274,13 +278,12 @@ export default function Home() {
         if (event.data.size > 0) recordedChunks.current.push(event.data);
       };
 
-      mediaRecorder.current.onstop = async () => {
+      mediaRecorder.current.onstop = () => {
         const blob = new Blob(recordedChunks.current, {
           type: "video/webm; codecs=vp9",
         });
-        const buffer = new Uint8Array(await blob.arrayBuffer());
-        window.electronAPI.saveRecording(buffer);
 
+        // Clean up resources
         if (animationFrameId.current) {
           cancelAnimationFrame(animationFrameId.current);
           animationFrameId.current = null;
@@ -292,10 +295,15 @@ export default function Home() {
 
         combinedStream.current?.getTracks().forEach((track) => track.stop());
 
+        // Reset state for next recording
         recordedChunks.current = [];
         combinedStream.current = null;
         streamSources.current = {};
         setStatus("idle");
+        setView("settings");
+
+        // Pass blob to the parent component to navigate to the editor
+        onRecordingComplete(blob);
       };
 
       mediaRecorder.current.start();
