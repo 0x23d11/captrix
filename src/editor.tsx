@@ -5,6 +5,29 @@ interface EditorProps {
   onExit: () => void;
 }
 
+type AspectRatio = "source" | "16:9" | "9:16";
+
+const OptionButton = ({
+  children,
+  selected,
+  onClick,
+}: {
+  children: React.ReactNode;
+  selected: boolean;
+  onClick: () => void;
+}) => (
+  <button
+    onClick={onClick}
+    className={`px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 focus:outline-none flex-grow ${
+      selected
+        ? "border-green-400 bg-green-900/50 text-green-300 shadow-md"
+        : "border-gray-600 bg-gray-800/80 text-gray-300 hover:border-gray-500 hover:bg-gray-700/50"
+    }`}
+  >
+    {children}
+  </button>
+);
+
 const SettingSlider = ({
   label,
   value,
@@ -50,6 +73,7 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
   const [shadow, setShadow] = useState(3);
   const [backgroundColor, setBackgroundColor] = useState("#99f695");
   const [isExporting, setIsExporting] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>("source");
 
   const shadowClasses: { [key: number]: string } = {
     1: "shadow-none",
@@ -74,9 +98,23 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
     const videoWidth = videoEl.videoWidth;
     const videoHeight = videoEl.videoHeight;
 
+    let targetWidth, targetHeight;
+
+    if (aspectRatio === "16:9") {
+      targetWidth = 1920;
+      targetHeight = 1080;
+    } else if (aspectRatio === "9:16") {
+      targetWidth = 1080;
+      targetHeight = 1920;
+    } else {
+      // 'source'
+      targetWidth = videoWidth;
+      targetHeight = videoHeight;
+    }
+
     const canvas = document.createElement("canvas");
-    canvas.width = videoWidth + padding * 2;
-    canvas.height = videoHeight + padding * 2;
+    canvas.width = targetWidth + padding * 2;
+    canvas.height = targetHeight + padding * 2;
     const ctx = canvas.getContext("2d");
 
     // Get the video track from the canvas
@@ -114,6 +152,24 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
 
     recorder.start();
 
+    // Calculate source video crop for "cover" effect
+    const videoRatio = videoWidth / videoHeight;
+    const targetRatio = targetWidth / targetHeight;
+    let sx = 0,
+      sy = 0,
+      sWidth = videoWidth,
+      sHeight = videoHeight;
+
+    if (videoRatio > targetRatio) {
+      // Video is wider than target, crop x-axis
+      sWidth = videoHeight * targetRatio;
+      sx = (videoWidth - sWidth) / 2;
+    } else {
+      // Video is taller than target, crop y-axis
+      sHeight = videoWidth / targetRatio;
+      sy = (videoHeight - sHeight) / 2;
+    }
+
     const renderFrame = () => {
       if (videoEl.paused || videoEl.ended) {
         recorder.stop();
@@ -125,7 +181,7 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
 
       ctx.save();
       ctx.beginPath();
-      const br = Math.min(borderRadius, videoWidth / 2, videoHeight / 2);
+      const br = Math.min(borderRadius, targetWidth / 2, targetHeight / 2);
       ctx.moveTo(padding + br, padding);
       ctx.lineTo(canvas.width - padding - br, padding);
       ctx.quadraticCurveTo(
@@ -153,7 +209,17 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
       ctx.closePath();
       ctx.clip();
 
-      ctx.drawImage(videoEl, padding, padding, videoWidth, videoHeight);
+      ctx.drawImage(
+        videoEl,
+        sx,
+        sy,
+        sWidth,
+        sHeight,
+        padding,
+        padding,
+        targetWidth,
+        targetHeight
+      );
       ctx.restore();
 
       requestAnimationFrame(renderFrame);
@@ -161,7 +227,7 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
 
     videoEl.play();
     requestAnimationFrame(renderFrame);
-  }, [videoBlob, padding, borderRadius, backgroundColor]);
+  }, [videoBlob, padding, borderRadius, backgroundColor, aspectRatio]);
 
   return (
     <div className="bg-[#111312] text-white min-h-screen font-sans flex flex-col md:flex-row">
@@ -169,6 +235,29 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
         <h2 className="text-xl font-bold mb-6">Styling</h2>
 
         <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-gray-400">Aspect Ratio</label>
+            <div className="flex items-center gap-2">
+              <OptionButton
+                selected={aspectRatio === "source"}
+                onClick={() => setAspectRatio("source")}
+              >
+                Source
+              </OptionButton>
+              <OptionButton
+                selected={aspectRatio === "16:9"}
+                onClick={() => setAspectRatio("16:9")}
+              >
+                16:9
+              </OptionButton>
+              <OptionButton
+                selected={aspectRatio === "9:16"}
+                onClick={() => setAspectRatio("9:16")}
+              >
+                9:16
+              </OptionButton>
+            </div>
+          </div>
           <div>
             <label className="text-sm text-gray-400 mb-2 block">
               Background Color
@@ -231,7 +320,7 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
         style={{ backgroundColor: backgroundColor }}
       >
         <div
-          className={`transition-all duration-200 ${shadowClasses[shadow]}`}
+          className={`transition-all duration-200 ${shadowClasses[shadow]} max-w-[80vw] max-h-[80vh] flex items-center justify-center`}
           style={{
             padding: `${padding}px`,
           }}
@@ -243,9 +332,16 @@ export default function Editor({ videoBlob, onExit }: EditorProps) {
               controls
               autoPlay
               loop
-              className="max-w-full max-h-[70vh] block"
+              className="block h-full"
               style={{
                 borderRadius: `${borderRadius}px`,
+                aspectRatio:
+                  aspectRatio === "source"
+                    ? "auto"
+                    : aspectRatio === "16:9"
+                    ? "16 / 9"
+                    : "9 / 16",
+                objectFit: "cover",
               }}
             />
           ) : (
