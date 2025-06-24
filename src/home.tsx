@@ -80,6 +80,13 @@ export default function Home() {
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const recordedChunks = useRef<Blob[]>([]);
   const combinedStream = useRef<MediaStream | null>(null);
+  const animationFrameId = useRef<number | null>(null);
+  const streamSources = useRef<{
+    screen?: MediaStream;
+    webcam?: MediaStream;
+    mic?: MediaStream;
+    composited?: MediaStream;
+  }>({});
 
   const [view, setView] = useState<"settings" | "select-source">("settings");
 
@@ -87,6 +94,8 @@ export default function Home() {
   const [audioInput, setAudioInput] = useState("None");
   const [videoQuality, setVideoQuality] = useState("High");
   const [frameRate, setFrameRate] = useState(60);
+  const [includeWebcam, setIncludeWebcam] = useState(true);
+  const [resolution, setResolution] = useState("Source");
 
   useEffect(() => {
     if (view === "select-source") {
@@ -105,6 +114,15 @@ export default function Home() {
     setStatus("preparing");
     setView("settings");
 
+    const RESOLUTIONS: Record<
+      string,
+      { width: number; height: number } | null
+    > = {
+      Source: null,
+      "1080p": { width: 1920, height: 1080 },
+      "720p": { width: 1280, height: 720 },
+    };
+
     try {
       let videoStream: MediaStream = await navigator.mediaDevices.getUserMedia({
         audio: false,
@@ -120,44 +138,115 @@ export default function Home() {
         } as any,
       });
 
-      if (cropInfo) {
-        const { rect, scaleFactor } = cropInfo;
-        const scaledRect = {
-          x: rect.x * scaleFactor,
-          y: rect.y * scaleFactor,
-          width: rect.width * scaleFactor,
-          height: rect.height * scaleFactor,
-        };
+      streamSources.current.screen = videoStream;
 
-        const videoTrack = videoStream.getVideoTracks()[0];
-        const videoEl = document.createElement("video");
-        videoEl.srcObject = new MediaStream([videoTrack]);
-        await videoEl.play();
+      const needsCanvas = includeWebcam || resolution !== "Source" || cropInfo;
+
+      if (needsCanvas) {
+        const screenVideoEl = document.createElement("video");
+        const screenReadyPromise = new Promise<void>((resolve, reject) => {
+          screenVideoEl.onloadeddata = () => resolve();
+          screenVideoEl.onerror = (e) => reject(e);
+        });
+        screenVideoEl.srcObject = videoStream;
+        screenVideoEl.muted = true;
+        screenVideoEl.play();
+
+        let webcamVideoEl: HTMLVideoElement;
+        let webcamReadyPromise = Promise.resolve();
+
+        if (includeWebcam) {
+          const webcamStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+          });
+          streamSources.current.webcam = webcamStream;
+          webcamVideoEl = document.createElement("video");
+          webcamReadyPromise = new Promise<void>((resolve, reject) => {
+            webcamVideoEl.onloadeddata = () => resolve();
+            webcamVideoEl.onerror = (e) => reject(e);
+          });
+          webcamVideoEl.srcObject = webcamStream;
+          webcamVideoEl.muted = true;
+          webcamVideoEl.play();
+        }
+
+        await Promise.all([screenReadyPromise, webcamReadyPromise]);
+
+        const screenSettings = videoStream.getVideoTracks()[0].getSettings();
+
+        // Determine source rect (for cropping)
+        let sx = 0,
+          sy = 0,
+          sWidth = screenSettings.width,
+          sHeight = screenSettings.height;
+
+        if (cropInfo) {
+          const { rect, scaleFactor } = cropInfo;
+          sx = rect.x * scaleFactor;
+          sy = rect.y * scaleFactor;
+          sWidth = rect.width * scaleFactor;
+          sHeight = rect.height * scaleFactor;
+        }
+
+        // Determine canvas dimensions (for scaling)
+        const sourceAspectRatio = sWidth / sHeight;
+        let canvasWidth = sWidth;
+        let canvasHeight = sHeight;
+        const targetRes = RESOLUTIONS[resolution];
+
+        if (
+          targetRes &&
+          (canvasWidth > targetRes.width || canvasHeight > targetRes.height)
+        ) {
+          if (sourceAspectRatio > targetRes.width / targetRes.height) {
+            canvasWidth = targetRes.width;
+            canvasHeight = canvasWidth / sourceAspectRatio;
+          } else {
+            canvasHeight = targetRes.height;
+            canvasWidth = canvasHeight * sourceAspectRatio;
+          }
+        }
 
         const canvas = document.createElement("canvas");
-        canvas.width = scaledRect.width;
-        canvas.height = scaledRect.height;
+        canvas.width = Math.round(canvasWidth / 2) * 2;
+        canvas.height = Math.round(canvasHeight / 2) * 2;
         const ctx = canvas.getContext("2d");
 
-        const drawFrame = () => {
-          if (videoEl.srcObject) {
-            ctx.drawImage(
-              videoEl,
-              scaledRect.x,
-              scaledRect.y,
-              scaledRect.width,
-              scaledRect.height,
-              0,
-              0,
-              scaledRect.width,
-              scaledRect.height
-            );
-            requestAnimationFrame(drawFrame);
-          }
-        };
-        drawFrame();
+        const drawFrames = () => {
+          // Draw screen (cropped and scaled)
+          ctx.drawImage(
+            screenVideoEl,
+            sx,
+            sy,
+            sWidth,
+            sHeight,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+          );
 
-        videoStream = canvas.captureStream();
+          if (webcamVideoEl) {
+            const webcamWidth = canvas.width / 5;
+            const webcamHeight =
+              (webcamVideoEl.videoHeight / webcamVideoEl.videoWidth) *
+              webcamWidth;
+            const margin = 20;
+
+            ctx.drawImage(
+              webcamVideoEl,
+              canvas.width - webcamWidth - margin,
+              canvas.height - webcamHeight - margin,
+              webcamWidth,
+              webcamHeight
+            );
+          }
+          animationFrameId.current = requestAnimationFrame(drawFrames);
+        };
+        drawFrames();
+
+        videoStream = canvas.captureStream(frameRate);
+        streamSources.current.composited = videoStream;
       }
 
       combinedStream.current = new MediaStream();
@@ -170,6 +259,7 @@ export default function Home() {
           video: false,
           audio: true,
         });
+        streamSources.current.mic = audioStream;
         audioStream
           .getAudioTracks()
           .forEach((track) => combinedStream.current.addTrack(track));
@@ -191,9 +281,20 @@ export default function Home() {
         const buffer = new Uint8Array(await blob.arrayBuffer());
         window.electronAPI.saveRecording(buffer);
 
+        if (animationFrameId.current) {
+          cancelAnimationFrame(animationFrameId.current);
+          animationFrameId.current = null;
+        }
+
+        Object.values(streamSources.current).forEach((stream) =>
+          stream?.getTracks().forEach((track) => track.stop())
+        );
+
         combinedStream.current?.getTracks().forEach((track) => track.stop());
+
         recordedChunks.current = [];
         combinedStream.current = null;
+        streamSources.current = {};
         setStatus("idle");
       };
 
@@ -350,6 +451,42 @@ export default function Home() {
               onClick={() => setAudioInput("None")}
             >
               None
+            </OptionButton>
+          </SettingsSection>
+
+          <SettingsSection title="Webcam Overlay">
+            <OptionButton
+              selected={includeWebcam}
+              onClick={() => setIncludeWebcam(true)}
+            >
+              On
+            </OptionButton>
+            <OptionButton
+              selected={!includeWebcam}
+              onClick={() => setIncludeWebcam(false)}
+            >
+              Off
+            </OptionButton>
+          </SettingsSection>
+
+          <SettingsSection title="Resolution">
+            <OptionButton
+              selected={resolution === "Source"}
+              onClick={() => setResolution("Source")}
+            >
+              Source
+            </OptionButton>
+            <OptionButton
+              selected={resolution === "1080p"}
+              onClick={() => setResolution("1080p")}
+            >
+              1080p
+            </OptionButton>
+            <OptionButton
+              selected={resolution === "720p"}
+              onClick={() => setResolution("720p")}
+            >
+              720p
             </OptionButton>
           </SettingsSection>
 
