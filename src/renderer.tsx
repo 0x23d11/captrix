@@ -96,7 +96,7 @@ const Recorder = ({
   clearSource: () => void;
 }) => {
   const [recordingState, setRecordingState] = useState<
-    "idle" | "recording" | "recorded"
+    "idle" | "recording" | "paused" | "recorded"
   >("idle");
   const mediaRecorder = React.useRef<MediaRecorder | null>(null);
   const recordedChunks = React.useRef<Blob[]>([]);
@@ -170,6 +170,20 @@ const Recorder = ({
     }
   };
 
+  const pauseRecording = () => {
+    if (mediaRecorder.current) {
+      mediaRecorder.current.pause();
+      setRecordingState("paused");
+    }
+  };
+
+  const resumeRecording = () => {
+    if (mediaRecorder.current) {
+      mediaRecorder.current.resume();
+      setRecordingState("recording");
+    }
+  };
+
   const stopRecording = () => {
     if (mediaRecorder.current) {
       mediaRecorder.current.stop();
@@ -205,7 +219,16 @@ const Recorder = ({
           <button onClick={startRecording}>Start</button>
         )}
         {recordingState === "recording" && (
-          <button onClick={stopRecording}>Stop</button>
+          <>
+            <button onClick={pauseRecording}>Pause</button>
+            <button onClick={stopRecording}>Stop</button>
+          </>
+        )}
+        {recordingState === "paused" && (
+          <>
+            <button onClick={resumeRecording}>Resume</button>
+            <button onClick={stopRecording}>Stop</button>
+          </>
         )}
         {recordingState === "recorded" && (
           <>
