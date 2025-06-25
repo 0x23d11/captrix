@@ -17,7 +17,7 @@ Here is a step-by-step plan for the features we will build:
 
 1.  **Setup React & TypeScript**: Integrate React into the Electron renderer process.
 2.  **Basic UI Shell**: Create the main application window and layout with placeholders for controls and video preview.
-3.  **Screen Source Selection**: Allow the user to select what to record: the entire screen, a specific application window, or a custom area.
+3.  **Screen Source Selection**: Allow the user to select what to record: the entire screen, a specific application window.
 4.  **Recording Controls**: Implement Start, Stop, and Pause/Resume functionality for recording.
 5.  **Video Preview**: Display the recorded video in the application.
 
