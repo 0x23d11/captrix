@@ -101,73 +101,141 @@ const Recorder = ({
   const mediaRecorder = React.useRef<MediaRecorder | null>(null);
   const recordedChunks = React.useRef<Blob[]>([]);
   const videoRef = React.useRef<HTMLVideoElement>(null);
+  const videoStreamRef = React.useRef<MediaStream | null>(null);
+  const audioStreamRef = React.useRef<MediaStream | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [audioSources, setAudioSources] = useState<MediaDeviceInfo[]>([]);
+  const [selectedAudioSourceId, setSelectedAudioSourceId] = useState<
+    string | null
+  >(null);
+
+  const getVideoStream = async () => {
+    if (videoStreamRef.current) {
+      videoStreamRef.current.getTracks().forEach((track) => track.stop());
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          // @ts-expect-error - chromeMediaSourceId is a valid constraint
+          mandatory: {
+            chromeMediaSource: "desktop",
+            chromeMediaSourceId: source.id,
+          },
+        },
+      });
+      videoStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.muted = true;
+        videoRef.current.controls = false;
+        videoRef.current.play();
+      }
+    } catch (error) {
+      console.error("Error accessing media devices.", error);
+    }
+  };
 
   useEffect(() => {
-    const getStream = async () => {
+    const getAudioSources = async () => {
       try {
+        // Request dummy audio stream to get permissions
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            // @ts-expect-error - chromeMediaSourceId is a valid constraint
-            mandatory: {
-              chromeMediaSource: "desktop",
-              chromeMediaSourceId: source.id,
-            },
-          },
+          audio: true,
         });
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.src = "";
-          videoRef.current.controls = false;
-          videoRef.current.muted = true;
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputDevices = devices.filter(
+          (device) => device.kind === "audioinput"
+        );
+        setAudioSources(audioInputDevices);
+        if (audioInputDevices.length > 0) {
+          setSelectedAudioSourceId(audioInputDevices[0].deviceId);
         }
-
-        mediaRecorder.current = new MediaRecorder(stream);
-        mediaRecorder.current.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            recordedChunks.current.push(event.data);
-          }
-        };
-        mediaRecorder.current.onstop = () => {
-          const blob = new Blob(recordedChunks.current, {
-            type: "video/webm; codecs=vp9",
-          });
-          const url = URL.createObjectURL(blob);
-          setVideoUrl(url);
-          if (videoRef.current) {
-            videoRef.current.srcObject = null;
-            videoRef.current.src = url;
-            videoRef.current.controls = true;
-            videoRef.current.muted = false;
-          }
-          recordedChunks.current = [];
-          setRecordingState("recorded");
-        };
+        // Stop dummy stream
+        stream.getTracks().forEach((track) => track.stop());
       } catch (error) {
-        console.error("Error accessing media devices.", error);
+        console.error("Could not get audio devices or permissions.", error);
+        setAudioSources([]);
       }
     };
 
-    getStream();
+    getAudioSources();
+  }, []);
+
+  useEffect(() => {
+    getVideoStream();
 
     return () => {
-      mediaRecorder.current?.stream
-        .getTracks()
-        .forEach((track) => track.stop());
+      if (videoStreamRef.current) {
+        videoStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
       if (videoUrl) {
         URL.revokeObjectURL(videoUrl);
       }
     };
   }, [source]);
 
-  const startRecording = () => {
-    if (mediaRecorder.current) {
-      recordedChunks.current = [];
-      mediaRecorder.current.start();
-      setRecordingState("recording");
+  const startRecording = async () => {
+    recordedChunks.current = [];
+
+    const videoStream = videoStreamRef.current;
+    if (!videoStream) {
+      console.error("Video stream not available");
+      return;
     }
+
+    let audioStream: MediaStream | null = null;
+    if (selectedAudioSourceId) {
+      try {
+        audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: { exact: selectedAudioSourceId },
+          },
+          video: false,
+        });
+        audioStreamRef.current = audioStream;
+      } catch (error) {
+        console.error("Error accessing audio device.", error);
+      }
+    }
+
+    const videoTracks = videoStream.getTracks().map((track) => track.clone());
+    const audioTracks = audioStream ? audioStream.getTracks() : [];
+
+    const combinedStream = new MediaStream([...videoTracks, ...audioTracks]);
+
+    mediaRecorder.current = new MediaRecorder(combinedStream, {
+      mimeType: "video/webm; codecs=vp9,opus",
+    });
+    mediaRecorder.current.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        recordedChunks.current.push(event.data);
+      }
+    };
+    mediaRecorder.current.onstop = () => {
+      combinedStream.getTracks().forEach((track) => track.stop());
+      audioStreamRef.current = null;
+
+      const blob = new Blob(recordedChunks.current, {
+        type: "video/webm; codecs=vp9,opus",
+      });
+      const url = URL.createObjectURL(blob);
+      setVideoUrl(url);
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+        videoRef.current.src = url;
+        videoRef.current.controls = true;
+        videoRef.current.muted = false;
+      }
+      recordedChunks.current = [];
+      setRecordingState("recorded");
+    };
+
+    mediaRecorder.current.start();
+    setRecordingState("recording");
   };
 
   const pauseRecording = () => {
@@ -199,6 +267,7 @@ const Recorder = ({
         console.log(`Video saved to ${filePath}`);
       }
     }
+    getVideoStream();
   };
 
   const recordAgain = () => {
@@ -214,6 +283,25 @@ const Recorder = ({
       <div className="preview">
         <video ref={videoRef} autoPlay muted={recordingState !== "recorded"} />
       </div>
+      {recordingState === "idle" && (
+        <div className="audio-selector">
+          <select
+            value={selectedAudioSourceId ?? "no-audio"}
+            onChange={(e) =>
+              setSelectedAudioSourceId(
+                e.target.value === "no-audio" ? null : e.target.value
+              )
+            }
+          >
+            <option value="no-audio">No Audio</option>
+            {audioSources.map((source) => (
+              <option key={source.deviceId} value={source.deviceId}>
+                {source.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="controls">
         {recordingState === "idle" && (
           <button onClick={startRecording}>Start</button>
