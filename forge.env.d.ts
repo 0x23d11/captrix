@@ -25,6 +25,7 @@ declare global {
       onMouseMove: (
         callback: (position: { x: number; y: number }) => void
       ) => () => void;
+      onKeyboardActivity: (callback: () => void) => () => void;
     };
   }
 }

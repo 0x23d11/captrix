@@ -24,4 +24,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener("mouse-move", listener);
     };
   },
+  onKeyboardActivity: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("keyboard-activity", listener);
+    return () => {
+      ipcRenderer.removeListener("keyboard-activity", listener);
+    };
+  },
 });

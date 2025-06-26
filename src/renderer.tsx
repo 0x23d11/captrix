@@ -118,9 +118,15 @@ const Recorder = ({
   const [autoZoomPan, setAutoZoomPan] = useState(false);
   const [isZoomedIn, setIsZoomedIn] = useState(false);
   const cursorPositionRef = React.useRef({ x: 0, y: 0 });
-  const lastMoveTimeRef = React.useRef(0);
   const [displays, setDisplays] = useState<Display[]>([]);
   const sourceRectRef = React.useRef({ sx: 0, sy: 0, sWidth: 0, sHeight: 0 });
+  const animationStateRef = React.useRef({
+    isAnimating: false,
+    startTime: 0,
+    duration: 600, // ms, increased for a smoother feel
+    startRect: { sx: 0, sy: 0, sWidth: 0, sHeight: 0 },
+    endRect: { sx: 0, sy: 0, sWidth: 0, sHeight: 0 },
+  });
 
   const inactivityTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   const isZoomedInRef = React.useRef(isZoomedIn);
@@ -230,34 +236,101 @@ const Recorder = ({
     };
 
     const handleClick = (position: { x: number; y: number }) => {
-      // We require a brief period of inactivity before a click triggers a zoom.
-      const quietPeriod = 300; // milliseconds
-      if (Date.now() - lastMoveTimeRef.current < quietPeriod) {
+      // Don't re-trigger zoom if already zoomed in.
+      if (isZoomedInRef.current) {
+        handleMouseAction(position);
         return;
       }
       handleMouseAction(position);
     };
 
     const handleMouseMove = (position: { x: number; y: number }) => {
-      lastMoveTimeRef.current = Date.now();
+      cursorPositionRef.current = position;
       if (isZoomedInRef.current) {
         handleMouseAction(position);
       }
     };
 
+    const handleKeyboardActivity = () => {
+      // On keyboard activity, zoom to the cursor's last known position.
+      handleMouseAction(cursorPositionRef.current);
+    };
+
     window.electronAPI.startMouseEventTracking();
     const unsubscribeClick = window.electronAPI.onMouseClick(handleClick);
     const unsubscribeMove = window.electronAPI.onMouseMove(handleMouseMove);
+    const unsubscribeKeyboard = window.electronAPI.onKeyboardActivity(
+      handleKeyboardActivity
+    );
 
     return () => {
       window.electronAPI.stopMouseEventTracking();
       unsubscribeClick();
       unsubscribeMove();
+      unsubscribeKeyboard();
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
       }
     };
   }, [autoZoomPan, recordingState, displays, source.id]);
+
+  useEffect(() => {
+    if (videoStreamRef.current && source) {
+      const video = videoStreamRef.current.getVideoTracks()[0];
+      const { width, height } = video.getSettings();
+
+      animationStateRef.current.isAnimating = true;
+      animationStateRef.current.startTime = performance.now();
+      animationStateRef.current.startRect = { ...sourceRectRef.current };
+
+      if (isZoomedIn) {
+        // We are zooming IN
+        const zoomFactor = 2;
+        const targetWidth = width / zoomFactor;
+        const targetHeight = height / zoomFactor;
+
+        let targetSx = 0;
+        let targetSy = 0;
+
+        if (source.id.startsWith("screen")) {
+          const displayId = parseInt(source.id.split(":")[1], 10);
+          const display = displays.find((d) => d.id === displayId);
+          if (display) {
+            const scaleX = width / display.bounds.width;
+            const scaleY = height / display.bounds.height;
+            const scaledCursorX =
+              (cursorPositionRef.current.x - display.bounds.x) * scaleX;
+            const scaledCursorY =
+              (cursorPositionRef.current.y - display.bounds.y) * scaleY;
+
+            targetSx = Math.max(
+              0,
+              Math.min(scaledCursorX - targetWidth / 2, width - targetWidth)
+            );
+            targetSy = Math.max(
+              0,
+              Math.min(scaledCursorY - targetHeight / 2, height - targetHeight)
+            );
+          }
+        }
+
+        animationStateRef.current.endRect = {
+          sx: targetSx,
+          sy: targetSy,
+          sWidth: targetWidth,
+          sHeight: targetHeight,
+        };
+      } else {
+        // We are zooming OUT
+        animationStateRef.current.endRect = {
+          sx: 0,
+          sy: 0,
+          sWidth: width,
+          sHeight: height,
+        };
+      }
+    }
+  }, [isZoomedIn, displays, source.id]);
 
   useEffect(() => {
     const getWebcamStream = async () => {
@@ -320,7 +393,6 @@ const Recorder = ({
       clearTimeout(inactivityTimerRef.current);
     }
     recordedChunks.current = [];
-    sourceRectRef.current = { sx: 0, sy: 0, sWidth: 0, sHeight: 0 };
 
     const videoStream = videoStreamRef.current;
     if (!videoStream) {
@@ -356,75 +428,89 @@ const Recorder = ({
     canvasRef.current = canvas;
     const ctx = canvas.getContext("2d");
 
+    // Initialize the source rectangle to the full video size
+    sourceRectRef.current = {
+      sx: 0,
+      sy: 0,
+      sWidth: screenVideo.videoWidth,
+      sHeight: screenVideo.videoHeight,
+    };
+
+    // Standard easing function for smooth animations
+    const easeInOutCubic = (t: number) =>
+      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
     const drawFrames = () => {
       if (!ctx) return;
 
-      let targetSx = 0;
-      let targetSy = 0;
-      let targetWidth = screenVideo.videoWidth;
-      let targetHeight = screenVideo.videoHeight;
+      const animState = animationStateRef.current;
 
-      if (
-        autoZoomPan &&
-        isZoomedInRef.current &&
-        source.id.startsWith("screen")
-      ) {
-        const displayId = parseInt(source.id.split(":")[1], 10);
-        const display = displays.find((d) => d.id === displayId);
+      if (animState.isAnimating) {
+        const now = performance.now();
+        const elapsed = now - animState.startTime;
+        const progress = Math.min(elapsed / animState.duration, 1);
+        const easedProgress = easeInOutCubic(progress);
 
-        if (display) {
-          const zoomFactor = 2;
-          targetWidth = screenVideo.videoWidth / zoomFactor;
-          targetHeight = screenVideo.videoHeight / zoomFactor;
+        sourceRectRef.current.sx =
+          animState.startRect.sx +
+          (animState.endRect.sx - animState.startRect.sx) * easedProgress;
+        sourceRectRef.current.sy =
+          animState.startRect.sy +
+          (animState.endRect.sy - animState.startRect.sy) * easedProgress;
+        sourceRectRef.current.sWidth =
+          animState.startRect.sWidth +
+          (animState.endRect.sWidth - animState.startRect.sWidth) *
+            easedProgress;
+        sourceRectRef.current.sHeight =
+          animState.startRect.sHeight +
+          (animState.endRect.sHeight - animState.startRect.sHeight) *
+            easedProgress;
 
-          // Scale cursor position from display coordinates to video coordinates
-          const scaleX = screenVideo.videoWidth / display.bounds.width;
-          const scaleY = screenVideo.videoHeight / display.bounds.height;
-
-          const scaledCursorX =
-            (cursorPositionRef.current.x - display.bounds.x) * scaleX;
-          const scaledCursorY =
-            (cursorPositionRef.current.y - display.bounds.y) * scaleY;
-
-          targetSx = Math.max(
-            0,
-            Math.min(
-              scaledCursorX - targetWidth / 2,
-              screenVideo.videoWidth - targetWidth
-            )
-          );
-          targetSy = Math.max(
-            0,
-            Math.min(
-              scaledCursorY - targetHeight / 2,
-              screenVideo.videoHeight - targetHeight
-            )
-          );
+        if (progress >= 1) {
+          animState.isAnimating = false;
         }
-      }
+      } else if (isZoomedInRef.current) {
+        // This is the "follow mode" panning logic
+        let targetSx = sourceRectRef.current.sx;
+        let targetSy = sourceRectRef.current.sy;
+        const targetWidth = sourceRectRef.current.sWidth;
+        const targetHeight = sourceRectRef.current.sHeight;
 
-      if (
-        sourceRectRef.current.sWidth === 0 &&
-        sourceRectRef.current.sHeight === 0
-      ) {
-        sourceRectRef.current = {
-          sx: 0,
-          sy: 0,
-          sWidth: screenVideo.videoWidth,
-          sHeight: screenVideo.videoHeight,
-        };
-      }
+        if (source.id.startsWith("screen")) {
+          const displayId = parseInt(source.id.split(":")[1], 10);
+          const display = displays.find((d) => d.id === displayId);
 
-      // A lower value creates a smoother, slower transition.
-      const smoothing = 0.05;
-      sourceRectRef.current.sx +=
-        (targetSx - sourceRectRef.current.sx) * smoothing;
-      sourceRectRef.current.sy +=
-        (targetSy - sourceRectRef.current.sy) * smoothing;
-      sourceRectRef.current.sWidth +=
-        (targetWidth - sourceRectRef.current.sWidth) * smoothing;
-      sourceRectRef.current.sHeight +=
-        (targetHeight - sourceRectRef.current.sHeight) * smoothing;
+          if (display) {
+            const scaleX = screenVideo.videoWidth / display.bounds.width;
+            const scaleY = screenVideo.videoHeight / display.bounds.height;
+            const scaledCursorX =
+              (cursorPositionRef.current.x - display.bounds.x) * scaleX;
+            const scaledCursorY =
+              (cursorPositionRef.current.y - display.bounds.y) * scaleY;
+
+            targetSx = Math.max(
+              0,
+              Math.min(
+                scaledCursorX - targetWidth / 2,
+                screenVideo.videoWidth - targetWidth
+              )
+            );
+            targetSy = Math.max(
+              0,
+              Math.min(
+                scaledCursorY - targetHeight / 2,
+                screenVideo.videoHeight - targetHeight
+              )
+            );
+          }
+        }
+
+        const smoothing = 0.05;
+        sourceRectRef.current.sx +=
+          (targetSx - sourceRectRef.current.sx) * smoothing;
+        sourceRectRef.current.sy +=
+          (targetSy - sourceRectRef.current.sy) * smoothing;
+      }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(

@@ -30,15 +30,24 @@ const sendMouseMove = (event: { x: number; y: number }) => {
   }
 };
 
+const sendKeydown = () => {
+  console.log("Keyboard activity detected in main process.");
+  if (mainWindow) {
+    mainWindow.webContents.send("keyboard-activity");
+  }
+};
+
 ipcMain.on("start-mouse-event-tracking", () => {
   uIOhook.on("mousedown", sendMouseClick);
   uIOhook.on("mousemove", sendMouseMove);
+  uIOhook.on("keydown", sendKeydown);
   uIOhook.start();
 });
 
 ipcMain.on("stop-mouse-event-tracking", () => {
   uIOhook.off("mousedown", sendMouseClick);
   uIOhook.off("mousemove", sendMouseMove);
+  uIOhook.off("keydown", sendKeydown);
   // It's safer to not stop uiohook here, as it's a shared resource.
   // We will stop it on app quit.
 });
