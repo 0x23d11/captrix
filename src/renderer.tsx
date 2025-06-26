@@ -118,6 +118,7 @@ const Recorder = ({
   const [autoZoomPan, setAutoZoomPan] = useState(false);
   const [isZoomedIn, setIsZoomedIn] = useState(false);
   const cursorPositionRef = React.useRef({ x: 0, y: 0 });
+  const lastMoveTimeRef = React.useRef(0);
   const [displays, setDisplays] = useState<Display[]>([]);
   const sourceRectRef = React.useRef({ sx: 0, sy: 0, sWidth: 0, sHeight: 0 });
 
@@ -228,14 +229,24 @@ const Recorder = ({
       }, 2000); // 2 seconds of inactivity
     };
 
+    const handleClick = (position: { x: number; y: number }) => {
+      // We require a brief period of inactivity before a click triggers a zoom.
+      const quietPeriod = 300; // milliseconds
+      if (Date.now() - lastMoveTimeRef.current < quietPeriod) {
+        return;
+      }
+      handleMouseAction(position);
+    };
+
     const handleMouseMove = (position: { x: number; y: number }) => {
+      lastMoveTimeRef.current = Date.now();
       if (isZoomedInRef.current) {
         handleMouseAction(position);
       }
     };
 
     window.electronAPI.startMouseEventTracking();
-    const unsubscribeClick = window.electronAPI.onMouseClick(handleMouseAction);
+    const unsubscribeClick = window.electronAPI.onMouseClick(handleClick);
     const unsubscribeMove = window.electronAPI.onMouseMove(handleMouseMove);
 
     return () => {
