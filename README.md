@@ -21,19 +21,19 @@ Here is a step-by-step plan for the features we will build:
 4.  **Recording Controls**: Implement Start, Stop, and Pause/Resume functionality for recording.
 5.  **Video Preview**: Display the recorded video in the application.
 
-### Phase 2: Enhancements and Media Handling
+### Phase 2: Recording Enhancements
 
 6.  **Audio Recording**: Add the ability to capture audio from the system and/or a microphone.
 7.  **Webcam Overlay**: Allow recording from the webcam and display it as an overlay on the screen recording.
-8.  **Video Trimming**: Implement basic video editing to trim the start and end of recordings.
-9.  **Export Options**: Allow users to save recordings in different formats (e.g., MP4, WebM, GIF).
+8.  **Auto-Zoom & Pan**: Automatically follow and zoom in on the cursor or active window.
+9.  **Cursor Highlighting**: Add visual effects to the mouse cursor to make it stand out.
 
-### Phase 3: Post-Processing & Effects
+### Phase 3: Post-Recording Video Editor
 
-10. **Auto-Zoom & Pan**: Automatically follow and zoom in on the cursor or active window.
-11. **Cursor Highlighting**: Add visual effects to the mouse cursor to make it stand out.
-12. **Background Styling**: Add padding, blur, or custom image backgrounds to the video.
-13. **Video Annotations**: Add text, shapes, and other annotations on top of the recorded video.
+10. **Video Trimming**: Implement basic video editing to trim the start and end of recordings.
+11. **Background Styling**: Add padding, blur, or custom image backgrounds to the video.
+12. **Video Annotations**: Add text, shapes, and other annotations on top of the recorded video.
+13. **Export Options**: Allow users to save recordings in different formats (e.g., MP4, WebM, GIF).
 
 ### Phase 4: Application Polish
 
