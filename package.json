@@ -43,6 +43,9 @@
     "vite": "^5.4.19"
   },
   "dependencies": {
+    "@ffmpeg/core": "^0.12.6",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "electron-squirrel-startup": "^1.0.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

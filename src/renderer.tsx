@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
+import Editor from "./Editor";
 
 type Source = {
   id: string;
@@ -98,6 +99,7 @@ const Recorder = ({
   const [recordingState, setRecordingState] = useState<
     "idle" | "recording" | "paused" | "recorded"
   >("idle");
+  const [showEditor, setShowEditor] = useState(false);
   const mediaRecorder = React.useRef<MediaRecorder | null>(null);
   const recordedChunks = React.useRef<Blob[]>([]);
   const videoRef = React.useRef<HTMLVideoElement>(null);
@@ -680,6 +682,10 @@ const Recorder = ({
     };
   }, [recordingState, pauseRecording, resumeRecording]);
 
+  if (showEditor && videoUrl) {
+    return <Editor videoUrl={videoUrl} onBack={() => setShowEditor(false)} />;
+  }
+
   return (
     <div className="recorder">
       <div className="preview">
@@ -855,6 +861,7 @@ const Recorder = ({
           <>
             <button onClick={handleSave}>Save</button>
             <button onClick={recordAgain}>Record Again</button>
+            <button onClick={() => setShowEditor(true)}>Edit</button>
           </>
         )}
         <button onClick={clearSource}>Choose another source</button>
