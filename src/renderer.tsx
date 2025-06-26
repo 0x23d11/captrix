@@ -116,6 +116,13 @@ const Recorder = ({
   const [webcamSources, setWebcamSources] = useState<MediaDeviceInfo[]>([]);
   const [selectedWebcamId, setSelectedWebcamId] = useState<string | null>(null);
   const [autoZoomPan, setAutoZoomPan] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settings, setSettings] = useState({
+    zoomFactor: 2,
+    animationDuration: 600,
+    smoothing: 0.05,
+    inactivityTimeout: 2000,
+  });
   const [isZoomedIn, setIsZoomedIn] = useState(false);
   const cursorPositionRef = React.useRef({ x: 0, y: 0 });
   const [displays, setDisplays] = useState<Display[]>([]);
@@ -232,7 +239,7 @@ const Recorder = ({
 
       inactivityTimerRef.current = setTimeout(() => {
         setIsZoomedIn(false);
-      }, 2000); // 2 seconds of inactivity
+      }, settings.inactivityTimeout); // 2 seconds of inactivity
     };
 
     const handleClick = (position: { x: number; y: number }) => {
@@ -282,10 +289,11 @@ const Recorder = ({
       animationStateRef.current.isAnimating = true;
       animationStateRef.current.startTime = performance.now();
       animationStateRef.current.startRect = { ...sourceRectRef.current };
+      animationStateRef.current.duration = settings.animationDuration;
 
       if (isZoomedIn) {
         // We are zooming IN
-        const zoomFactor = 2;
+        const zoomFactor = settings.zoomFactor;
         const targetWidth = width / zoomFactor;
         const targetHeight = height / zoomFactor;
 
@@ -505,7 +513,7 @@ const Recorder = ({
           }
         }
 
-        const smoothing = 0.05;
+        const smoothing = settings.smoothing;
         sourceRectRef.current.sx +=
           (targetSx - sourceRectRef.current.sx) * smoothing;
         sourceRectRef.current.sy +=
@@ -705,6 +713,90 @@ const Recorder = ({
                 <span> (Screen sources only)</span>
               )}
             </label>
+          </div>
+          <div className="settings-container">
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              disabled={!autoZoomPan}
+            >
+              {showSettings ? "Hide" : "Show"} Auto-Zoom Settings
+            </button>
+            {showSettings && autoZoomPan && (
+              <div className="settings-panel">
+                <div className="setting">
+                  <label htmlFor="zoomFactor">Zoom Strength</label>
+                  <input
+                    type="range"
+                    id="zoomFactor"
+                    min="1.5"
+                    max="5"
+                    step="0.1"
+                    value={settings.zoomFactor}
+                    onChange={(e) =>
+                      setSettings((s) => ({
+                        ...s,
+                        zoomFactor: parseFloat(e.target.value),
+                      }))
+                    }
+                  />
+                  <span>{settings.zoomFactor.toFixed(1)}x</span>
+                </div>
+                <div className="setting">
+                  <label htmlFor="animationDuration">Animation Speed</label>
+                  <input
+                    type="range"
+                    id="animationDuration"
+                    min="100"
+                    max="1500"
+                    step="50"
+                    value={settings.animationDuration}
+                    onChange={(e) =>
+                      setSettings((s) => ({
+                        ...s,
+                        animationDuration: parseInt(e.target.value, 10),
+                      }))
+                    }
+                  />
+                  <span>{settings.animationDuration}ms</span>
+                </div>
+                <div className="setting">
+                  <label htmlFor="smoothing">Follow Tightness</label>
+                  <input
+                    type="range"
+                    id="smoothing"
+                    min="0.01"
+                    max="0.2"
+                    step="0.01"
+                    value={settings.smoothing}
+                    onChange={(e) =>
+                      setSettings((s) => ({
+                        ...s,
+                        smoothing: parseFloat(e.target.value),
+                      }))
+                    }
+                  />
+                  <span>{settings.smoothing.toFixed(2)}</span>
+                </div>
+                <div className="setting">
+                  <label htmlFor="inactivityTimeout">Inactivity Timeout</label>
+                  <input
+                    type="range"
+                    id="inactivityTimeout"
+                    min="500"
+                    max="5000"
+                    step="100"
+                    value={settings.inactivityTimeout}
+                    onChange={(e) =>
+                      setSettings((s) => ({
+                        ...s,
+                        inactivityTimeout: parseInt(e.target.value, 10),
+                      }))
+                    }
+                  />
+                  <span>{(settings.inactivityTimeout / 1000).toFixed(1)}s</span>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
