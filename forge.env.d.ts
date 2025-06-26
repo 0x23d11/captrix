@@ -19,7 +19,10 @@ declare global {
       getDisplays: () => Promise<Display[]>;
       startMouseEventTracking: () => void;
       stopMouseEventTracking: () => void;
-      onMouseActivity: (
+      onMouseClick: (
+        callback: (position: { x: number; y: number }) => void
+      ) => () => void;
+      onMouseMove: (
         callback: (position: { x: number; y: number }) => void
       ) => () => void;
     };

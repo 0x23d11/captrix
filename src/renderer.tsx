@@ -191,62 +191,62 @@ const Recorder = ({
 
   useEffect(() => {
     if (
-      autoZoomPan &&
-      (recordingState === "recording" || recordingState === "paused")
+      !autoZoomPan ||
+      (recordingState !== "recording" && recordingState !== "paused")
     ) {
-      const handleMouseActivity = (position: { x: number; y: number }) => {
-        // For screen recordings, check if the click is within the selected display
-        if (source.id.startsWith("screen")) {
-          const displayId = parseInt(source.id.split(":")[1], 10);
-          const display = displays.find((d) => d.id === displayId);
-          if (display) {
-            const { x, y, width, height } = display.bounds;
-            if (
-              position.x < x ||
-              position.x > x + width ||
-              position.y < y ||
-              position.y > y + height
-            ) {
-              // Cursor is outside the selected display, so don't trigger the zoom.
-              return;
-            }
+      return;
+    }
+
+    const handleMouseAction = (position: { x: number; y: number }) => {
+      if (source.id.startsWith("screen")) {
+        const displayId = parseInt(source.id.split(":")[1], 10);
+        const display = displays.find((d) => d.id === displayId);
+        if (display) {
+          const { x, y, width, height } = display.bounds;
+          if (
+            position.x < x ||
+            position.x > x + width ||
+            position.y < y ||
+            position.y > y + height
+          ) {
+            return;
           }
         }
-        // For window recordings, we cannot easily get bounds, so zoom will trigger on any click.
+      }
+      cursorPositionRef.current = position;
 
-        cursorPositionRef.current = position;
+      if (!isZoomedInRef.current) {
+        setIsZoomedIn(true);
+      }
 
-        if (!isZoomedInRef.current) {
-          setIsZoomedIn(true);
-        }
-
-        if (inactivityTimerRef.current) {
-          clearTimeout(inactivityTimerRef.current);
-        }
-
-        inactivityTimerRef.current = setTimeout(() => {
-          setIsZoomedIn(false);
-        }, 2000); // 2 seconds of inactivity
-      };
-
-      window.electronAPI.startMouseEventTracking();
-      const unsubscribe =
-        window.electronAPI.onMouseActivity(handleMouseActivity);
-
-      return () => {
-        window.electronAPI.stopMouseEventTracking();
-        unsubscribe();
-        if (inactivityTimerRef.current) {
-          clearTimeout(inactivityTimerRef.current);
-        }
-      };
-    } else {
-      setIsZoomedIn(false);
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
       }
-    }
-  }, [autoZoomPan, recordingState]);
+
+      inactivityTimerRef.current = setTimeout(() => {
+        setIsZoomedIn(false);
+      }, 2000); // 2 seconds of inactivity
+    };
+
+    const handleMouseMove = (position: { x: number; y: number }) => {
+      if (isZoomedInRef.current) {
+        handleMouseAction(position);
+      }
+    };
+
+    window.electronAPI.startMouseEventTracking();
+    const unsubscribeClick = window.electronAPI.onMouseClick(handleMouseAction);
+    const unsubscribeMove = window.electronAPI.onMouseMove(handleMouseMove);
+
+    return () => {
+      window.electronAPI.stopMouseEventTracking();
+      unsubscribeClick();
+      unsubscribeMove();
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    };
+  }, [autoZoomPan, recordingState, displays, source.id]);
 
   useEffect(() => {
     const getWebcamStream = async () => {

@@ -18,19 +18,27 @@ if (started) {
 
 let mainWindow: BrowserWindow | null;
 
-const sendMouseActivity = (event: { x: number; y: number }) => {
+const sendMouseClick = (event: { x: number; y: number }) => {
   if (mainWindow) {
-    mainWindow.webContents.send("mouse-activity", { x: event.x, y: event.y });
+    mainWindow.webContents.send("mouse-click", { x: event.x, y: event.y });
+  }
+};
+
+const sendMouseMove = (event: { x: number; y: number }) => {
+  if (mainWindow) {
+    mainWindow.webContents.send("mouse-move", { x: event.x, y: event.y });
   }
 };
 
 ipcMain.on("start-mouse-event-tracking", () => {
-  uIOhook.on("mousedown", sendMouseActivity);
+  uIOhook.on("mousedown", sendMouseClick);
+  uIOhook.on("mousemove", sendMouseMove);
   uIOhook.start();
 });
 
 ipcMain.on("stop-mouse-event-tracking", () => {
-  uIOhook.off("mousedown", sendMouseActivity);
+  uIOhook.off("mousedown", sendMouseClick);
+  uIOhook.off("mousemove", sendMouseMove);
   // It's safer to not stop uiohook here, as it's a shared resource.
   // We will stop it on app quit.
 });

@@ -8,12 +8,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getDisplays: () => ipcRenderer.invoke("get-displays"),
   startMouseEventTracking: () => ipcRenderer.send("start-mouse-event-tracking"),
   stopMouseEventTracking: () => ipcRenderer.send("stop-mouse-event-tracking"),
-  onMouseActivity: (callback: (position: { x: number; y: number }) => void) => {
+  onMouseClick: (callback: (position: { x: number; y: number }) => void) => {
     const listener = (_event: unknown, position: { x: number; y: number }) =>
       callback(position);
-    ipcRenderer.on("mouse-activity", listener);
+    ipcRenderer.on("mouse-click", listener);
     return () => {
-      ipcRenderer.removeListener("mouse-activity", listener);
+      ipcRenderer.removeListener("mouse-click", listener);
+    };
+  },
+  onMouseMove: (callback: (position: { x: number; y: number }) => void) => {
+    const listener = (_event: unknown, position: { x: number; y: number }) =>
+      callback(position);
+    ipcRenderer.on("mouse-move", listener);
+    return () => {
+      ipcRenderer.removeListener("mouse-move", listener);
     };
   },
 });
