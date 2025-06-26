@@ -1,12 +1,56 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer, dialog } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  desktopCapturer,
+  dialog,
+  screen,
+} from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
 import started from "electron-squirrel-startup";
+import { uIOhook } from "uiohook-napi";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
   app.quit();
 }
+
+let mainWindow: BrowserWindow | null;
+
+const sendMouseClick = (event: { x: number; y: number }) => {
+  if (mainWindow) {
+    mainWindow.webContents.send("mouse-click", { x: event.x, y: event.y });
+  }
+};
+
+const sendMouseMove = (event: { x: number; y: number }) => {
+  if (mainWindow) {
+    mainWindow.webContents.send("mouse-move", { x: event.x, y: event.y });
+  }
+};
+
+const sendKeydown = () => {
+  console.log("Keyboard activity detected in main process.");
+  if (mainWindow) {
+    mainWindow.webContents.send("keyboard-activity");
+  }
+};
+
+ipcMain.on("start-mouse-event-tracking", () => {
+  uIOhook.on("mousedown", sendMouseClick);
+  uIOhook.on("mousemove", sendMouseMove);
+  uIOhook.on("keydown", sendKeydown);
+  uIOhook.start();
+});
+
+ipcMain.on("stop-mouse-event-tracking", () => {
+  uIOhook.off("mousedown", sendMouseClick);
+  uIOhook.off("mousemove", sendMouseMove);
+  uIOhook.off("keydown", sendKeydown);
+  // It's safer to not stop uiohook here, as it's a shared resource.
+  // We will stop it on app quit.
+});
 
 ipcMain.handle("get-sources", async () => {
   const sources = await desktopCapturer.getSources({
@@ -19,6 +63,10 @@ ipcMain.handle("get-sources", async () => {
       thumbnailURL: source.thumbnail.toDataURL(),
     };
   });
+});
+
+ipcMain.handle("get-displays", async () => {
+  return screen.getAllDisplays();
 });
 
 ipcMain.handle("save-video", async (_, buffer: ArrayBuffer) => {
@@ -35,12 +83,16 @@ ipcMain.handle("save-video", async (_, buffer: ArrayBuffer) => {
 
 const createWindow = () => {
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
     },
+  });
+
+  mainWindow.on("closed", () => {
+    mainWindow = null;
   });
 
   // and load the index.html of the app.
@@ -76,6 +128,10 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
+});
+
+app.on("before-quit", () => {
+  uIOhook.stop();
 });
 
 // In this file you can include the rest of your app's specific main process

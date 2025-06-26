@@ -9,7 +9,8 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "eslint --ext .ts,.tsx ."
+    "lint": "eslint --ext .ts,.tsx .",
+    "rebuild": "electron-rebuild -f -w uiohook-napi"
   },
   "keywords": [],
   "author": {
@@ -33,7 +34,8 @@
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "@vitejs/plugin-react": "^4.6.0",
-    "electron": "37.0.0",
+    "electron": "31.2.0",
+    "electron-rebuild": "^3.2.9",
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.32.0",
     "ts-node": "^10.9.2",
@@ -43,6 +45,7 @@
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "uiohook-napi": "^1.5.4"
   }
 }
