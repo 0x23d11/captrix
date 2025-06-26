@@ -117,6 +117,13 @@ body {
   padding: 10px;
 }
 
+.enhancements {
+  display: flex;
+  justify-content: center;
+  padding: 10px;
+  gap: 20px;
+}
+
 .audio-selector {
   display: flex;
   justify-content: center;

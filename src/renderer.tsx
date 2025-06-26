@@ -115,6 +115,15 @@ const Recorder = ({
   >(null);
   const [webcamSources, setWebcamSources] = useState<MediaDeviceInfo[]>([]);
   const [selectedWebcamId, setSelectedWebcamId] = useState<string | null>(null);
+  const [autoZoomPan, setAutoZoomPan] = useState(false);
+  const [isZoomedIn, setIsZoomedIn] = useState(false);
+  const cursorPositionRef = React.useRef({ x: 0, y: 0 });
+  const [displays, setDisplays] = useState<Display[]>([]);
+  const sourceRectRef = React.useRef({ sx: 0, sy: 0, sWidth: 0, sHeight: 0 });
+
+  const inactivityTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const isZoomedInRef = React.useRef(isZoomedIn);
+  isZoomedInRef.current = isZoomedIn;
 
   const getVideoStream = async () => {
     if (videoStreamRef.current) {
@@ -177,7 +186,48 @@ const Recorder = ({
     };
 
     getMediaSources();
+    window.electronAPI.getDisplays().then(setDisplays);
   }, []);
+
+  useEffect(() => {
+    if (
+      autoZoomPan &&
+      (recordingState === "recording" || recordingState === "paused")
+    ) {
+      const handleMouseActivity = (position: { x: number; y: number }) => {
+        cursorPositionRef.current = position;
+
+        if (!isZoomedInRef.current) {
+          setIsZoomedIn(true);
+        }
+
+        if (inactivityTimerRef.current) {
+          clearTimeout(inactivityTimerRef.current);
+        }
+
+        inactivityTimerRef.current = setTimeout(() => {
+          setIsZoomedIn(false);
+        }, 2000); // 2 seconds of inactivity
+      };
+
+      window.electronAPI.startMouseEventTracking();
+      const unsubscribe =
+        window.electronAPI.onMouseActivity(handleMouseActivity);
+
+      return () => {
+        window.electronAPI.stopMouseEventTracking();
+        unsubscribe();
+        if (inactivityTimerRef.current) {
+          clearTimeout(inactivityTimerRef.current);
+        }
+      };
+    } else {
+      setIsZoomedIn(false);
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    }
+  }, [autoZoomPan, recordingState]);
 
   useEffect(() => {
     const getWebcamStream = async () => {
@@ -235,7 +285,12 @@ const Recorder = ({
   }, [source]);
 
   const startRecording = async () => {
+    setIsZoomedIn(false);
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
     recordedChunks.current = [];
+    sourceRectRef.current = { sx: 0, sy: 0, sWidth: 0, sHeight: 0 };
 
     const videoStream = videoStreamRef.current;
     if (!videoStream) {
@@ -258,60 +313,125 @@ const Recorder = ({
       }
     }
 
-    const webcamStream = webcamStreamRef.current;
-    let combinedStream: MediaStream;
+    const screenVideo = document.createElement("video");
+    screenVideo.srcObject = videoStream;
+    screenVideo.muted = true;
+    screenVideo.play();
 
-    if (webcamStream) {
-      const screenVideo = document.createElement("video");
-      screenVideo.srcObject = videoStream;
-      screenVideo.muted = true;
-      screenVideo.play();
+    await new Promise((resolve) => (screenVideo.onloadedmetadata = resolve));
 
-      const webcamVideo = document.createElement("video");
-      webcamVideo.srcObject = webcamStream;
-      webcamVideo.muted = true;
-      webcamVideo.play();
+    const canvas = document.createElement("canvas");
+    canvas.width = screenVideo.videoWidth;
+    canvas.height = screenVideo.videoHeight;
+    canvasRef.current = canvas;
+    const ctx = canvas.getContext("2d");
 
-      await Promise.all([
-        new Promise((resolve) => (screenVideo.onloadedmetadata = resolve)),
-        new Promise((resolve) => (webcamVideo.onloadedmetadata = resolve)),
-      ]);
+    const drawFrames = () => {
+      if (!ctx) return;
 
-      const canvas = document.createElement("canvas");
-      canvas.width = screenVideo.videoWidth;
-      canvas.height = screenVideo.videoHeight;
-      canvasRef.current = canvas;
-      const ctx = canvas.getContext("2d");
+      let targetSx = 0;
+      let targetSy = 0;
+      let targetWidth = screenVideo.videoWidth;
+      let targetHeight = screenVideo.videoHeight;
 
-      const drawFrames = () => {
-        if (!ctx) return;
-        ctx.drawImage(screenVideo, 0, 0, canvas.width, canvas.height);
+      if (
+        autoZoomPan &&
+        isZoomedInRef.current &&
+        source.id.startsWith("screen")
+      ) {
+        const displayId = parseInt(source.id.split(":")[1], 10);
+        const display = displays.find((d) => d.id === displayId);
 
+        if (display) {
+          const zoomFactor = 2;
+          targetWidth = screenVideo.videoWidth / zoomFactor;
+          targetHeight = screenVideo.videoHeight / zoomFactor;
+
+          // Scale cursor position from display coordinates to video coordinates
+          const scaleX = screenVideo.videoWidth / display.bounds.width;
+          const scaleY = screenVideo.videoHeight / display.bounds.height;
+
+          const scaledCursorX =
+            (cursorPositionRef.current.x - display.bounds.x) * scaleX;
+          const scaledCursorY =
+            (cursorPositionRef.current.y - display.bounds.y) * scaleY;
+
+          targetSx = Math.max(
+            0,
+            Math.min(
+              scaledCursorX - targetWidth / 2,
+              screenVideo.videoWidth - targetWidth
+            )
+          );
+          targetSy = Math.max(
+            0,
+            Math.min(
+              scaledCursorY - targetHeight / 2,
+              screenVideo.videoHeight - targetHeight
+            )
+          );
+        }
+      }
+
+      if (
+        sourceRectRef.current.sWidth === 0 &&
+        sourceRectRef.current.sHeight === 0
+      ) {
+        sourceRectRef.current = {
+          sx: 0,
+          sy: 0,
+          sWidth: screenVideo.videoWidth,
+          sHeight: screenVideo.videoHeight,
+        };
+      }
+
+      const smoothing = 0.1;
+      sourceRectRef.current.sx +=
+        (targetSx - sourceRectRef.current.sx) * smoothing;
+      sourceRectRef.current.sy +=
+        (targetSy - sourceRectRef.current.sy) * smoothing;
+      sourceRectRef.current.sWidth +=
+        (targetWidth - sourceRectRef.current.sWidth) * smoothing;
+      sourceRectRef.current.sHeight +=
+        (targetHeight - sourceRectRef.current.sHeight) * smoothing;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(
+        screenVideo,
+        sourceRectRef.current.sx,
+        sourceRectRef.current.sy,
+        sourceRectRef.current.sWidth,
+        sourceRectRef.current.sHeight,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      if (webcamStreamRef.current && webcamPreviewRef.current?.srcObject) {
+        const webcamVideo = webcamPreviewRef.current;
         const webcamWidth = canvas.width / 4;
         const webcamHeight =
-          webcamWidth * (webcamVideo.videoHeight / webcamVideo.videoWidth);
+          webcamWidth *
+          (webcamVideo.videoHeight / webcamVideo.videoWidth || 9 / 16);
         const webcamX = canvas.width - webcamWidth - 20;
         const webcamY = canvas.height - webcamHeight - 20;
         ctx.drawImage(webcamVideo, webcamX, webcamY, webcamWidth, webcamHeight);
+      }
 
-        animationFrameId.current = requestAnimationFrame(drawFrames);
-      };
+      animationFrameId.current = requestAnimationFrame(drawFrames);
+    };
 
-      drawFrames();
-      combinedStream = canvas.captureStream(30);
-    } else {
-      const videoTracks = videoStream.getTracks().map((track) => track.clone());
-      const audioTracks = audioStream ? audioStream.getTracks() : [];
-      combinedStream = new MediaStream([...videoTracks, ...audioTracks]);
-    }
+    drawFrames();
 
-    if (audioStream) {
-      audioStream.getAudioTracks().forEach((track) => {
-        combinedStream.addTrack(track.clone());
-      });
-    }
+    const canvasStream = canvas.captureStream(30);
+    const audioTracks = audioStream ? audioStream.getTracks() : [];
+    const combinedStream = new MediaStream([
+      ...canvasStream.getVideoTracks(),
+      ...audioTracks,
+    ]);
 
-    if (videoRef.current && webcamStream) {
+    if (videoRef.current) {
       videoRef.current.srcObject = combinedStream;
       videoRef.current.play();
     }
@@ -372,6 +492,10 @@ const Recorder = ({
   const stopRecording = () => {
     if (mediaRecorder.current) {
       mediaRecorder.current.stop();
+      setIsZoomedIn(false);
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
     }
   };
 
@@ -393,6 +517,7 @@ const Recorder = ({
       URL.revokeObjectURL(videoUrl);
       setVideoUrl(null);
     }
+    getVideoStream();
   };
 
   return (
@@ -413,42 +538,58 @@ const Recorder = ({
         />
       </div>
       {recordingState === "idle" && (
-        <div className="media-selectors">
-          <div className="audio-selector">
-            <select
-              value={selectedAudioSourceId ?? "no-audio"}
-              onChange={(e) =>
-                setSelectedAudioSourceId(
-                  e.target.value === "no-audio" ? null : e.target.value
-                )
-              }
-            >
-              <option value="no-audio">No Audio</option>
-              {audioSources.map((source) => (
-                <option key={source.deviceId} value={source.deviceId}>
-                  {source.label}
-                </option>
-              ))}
-            </select>
+        <>
+          <div className="media-selectors">
+            <div className="audio-selector">
+              <select
+                value={selectedAudioSourceId ?? "no-audio"}
+                onChange={(e) =>
+                  setSelectedAudioSourceId(
+                    e.target.value === "no-audio" ? null : e.target.value
+                  )
+                }
+              >
+                <option value="no-audio">No Audio</option>
+                {audioSources.map((source) => (
+                  <option key={source.deviceId} value={source.deviceId}>
+                    {source.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="webcam-selector">
+              <select
+                value={selectedWebcamId ?? "no-webcam"}
+                onChange={(e) =>
+                  setSelectedWebcamId(
+                    e.target.value === "no-webcam" ? null : e.target.value
+                  )
+                }
+              >
+                <option value="no-webcam">No Webcam</option>
+                {webcamSources.map((source) => (
+                  <option key={source.deviceId} value={source.deviceId}>
+                    {source.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="webcam-selector">
-            <select
-              value={selectedWebcamId ?? "no-webcam"}
-              onChange={(e) =>
-                setSelectedWebcamId(
-                  e.target.value === "no-webcam" ? null : e.target.value
-                )
-              }
-            >
-              <option value="no-webcam">No Webcam</option>
-              {webcamSources.map((source) => (
-                <option key={source.deviceId} value={source.deviceId}>
-                  {source.label}
-                </option>
-              ))}
-            </select>
+          <div className="enhancements">
+            <label>
+              <input
+                type="checkbox"
+                checked={autoZoomPan}
+                onChange={(e) => setAutoZoomPan(e.target.checked)}
+                disabled={!source.id.startsWith("screen")}
+              />
+              Auto Zoom & Pan
+              {!source.id.startsWith("screen") && (
+                <span> (Screen sources only)</span>
+              )}
+            </label>
           </div>
-        </div>
+        </>
       )}
       <div className="controls">
         {recordingState === "idle" && (
