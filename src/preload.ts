@@ -31,4 +31,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener("keyboard-activity", listener);
     };
   },
+  onGlobalShortcut: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("global-shortcut-triggered", listener);
+    return () => {
+      ipcRenderer.removeListener("global-shortcut-triggered", listener);
+    };
+  },
 });
