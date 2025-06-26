@@ -645,6 +645,41 @@ const Recorder = ({
     getVideoStream();
   };
 
+  useEffect(() => {
+    const handleShortcut = () => {
+      if (recordingState === "recording" || recordingState === "paused") {
+        stopRecording();
+      } else if (recordingState === "idle") {
+        startRecording();
+      } else if (recordingState === "recorded") {
+        recordAgain();
+      }
+    };
+
+    const unsubscribe = window.electronAPI.onGlobalShortcut(handleShortcut);
+
+    return () => {
+      unsubscribe();
+    };
+  }, [recordingState, startRecording, stopRecording, recordAgain]);
+
+  useEffect(() => {
+    const handleShortcut = () => {
+      if (recordingState === "recording") {
+        pauseRecording();
+      } else if (recordingState === "paused") {
+        resumeRecording();
+      }
+    };
+
+    const unsubscribe =
+      window.electronAPI.onGlobalShortcutPauseResume(handleShortcut);
+
+    return () => {
+      unsubscribe();
+    };
+  }, [recordingState, pauseRecording, resumeRecording]);
+
   return (
     <div className="recorder">
       <div className="preview">

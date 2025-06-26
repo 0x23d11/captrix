@@ -5,6 +5,7 @@ import {
   desktopCapturer,
   dialog,
   screen,
+  globalShortcut,
 } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
@@ -111,7 +112,21 @@ const createWindow = () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on("ready", createWindow);
+app.on("ready", () => {
+  createWindow();
+
+  globalShortcut.register("CommandOrControl+Shift+R", () => {
+    if (mainWindow) {
+      mainWindow.webContents.send("global-shortcut-triggered");
+    }
+  });
+
+  globalShortcut.register("CommandOrControl+Shift+P", () => {
+    if (mainWindow) {
+      mainWindow.webContents.send("global-shortcut-pause-resume-triggered");
+    }
+  });
+});
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
@@ -131,6 +146,7 @@ app.on("activate", () => {
 });
 
 app.on("before-quit", () => {
+  globalShortcut.unregisterAll();
   uIOhook.stop();
 });
 

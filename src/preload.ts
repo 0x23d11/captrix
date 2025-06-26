@@ -31,4 +31,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener("keyboard-activity", listener);
     };
   },
+  onGlobalShortcut: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("global-shortcut-triggered", listener);
+    return () => {
+      ipcRenderer.removeListener("global-shortcut-triggered", listener);
+    };
+  },
+  onGlobalShortcutPauseResume: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("global-shortcut-pause-resume-triggered", listener);
+    return () => {
+      ipcRenderer.removeListener(
+        "global-shortcut-pause-resume-triggered",
+        listener
+      );
+    };
+  },
 });
