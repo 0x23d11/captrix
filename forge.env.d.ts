@@ -27,6 +27,7 @@ declare global {
       ) => () => void;
       onKeyboardActivity: (callback: () => void) => () => void;
       onGlobalShortcut: (callback: () => void) => () => void;
+      onGlobalShortcutPauseResume: (callback: () => void) => () => void;
     };
   }
 }

@@ -120,6 +120,12 @@ app.on("ready", () => {
       mainWindow.webContents.send("global-shortcut-triggered");
     }
   });
+
+  globalShortcut.register("CommandOrControl+Shift+P", () => {
+    if (mainWindow) {
+      mainWindow.webContents.send("global-shortcut-pause-resume-triggered");
+    }
+  });
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common

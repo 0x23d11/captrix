@@ -663,6 +663,23 @@ const Recorder = ({
     };
   }, [recordingState, startRecording, stopRecording, recordAgain]);
 
+  useEffect(() => {
+    const handleShortcut = () => {
+      if (recordingState === "recording") {
+        pauseRecording();
+      } else if (recordingState === "paused") {
+        resumeRecording();
+      }
+    };
+
+    const unsubscribe =
+      window.electronAPI.onGlobalShortcutPauseResume(handleShortcut);
+
+    return () => {
+      unsubscribe();
+    };
+  }, [recordingState, pauseRecording, resumeRecording]);
+
   return (
     <div className="recorder">
       <div className="preview">
