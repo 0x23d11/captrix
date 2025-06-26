@@ -2,6 +2,18 @@ import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import Editor from "./Editor";
+import {
+  FaDesktop,
+  FaWindowMaximize,
+  FaArrowLeft,
+  FaPlay,
+  FaPause,
+  FaStop,
+  FaSave,
+  FaRedo,
+  FaEdit,
+  FaCog,
+} from "react-icons/fa";
 
 type Source = {
   id: string;
@@ -47,13 +59,21 @@ const App = () => {
 
   if (!sourceType) {
     return (
-      <div className="source-selector">
-        <h1>What do you want to record?</h1>
-        <div className="source-types">
-          <button onClick={() => setSourceType("screen")}>
+      <div className="flex flex-col items-center justify-center h-screen bg-base-200">
+        <h1 className="text-4xl font-bold mb-8">What do you want to record?</h1>
+        <div className="flex gap-4">
+          <button
+            className="btn btn-primary btn-lg"
+            onClick={() => setSourceType("screen")}
+          >
+            <FaDesktop className="mr-2" />
             Record Entire Screen
           </button>
-          <button onClick={() => setSourceType("window")}>
+          <button
+            className="btn btn-secondary btn-lg"
+            onClick={() => setSourceType("window")}
+          >
+            <FaWindowMaximize className="mr-2" />
             Record an App Window
           </button>
         </div>
@@ -62,23 +82,42 @@ const App = () => {
   }
 
   return (
-    <div className="source-selector">
-      <div className="source-types">
-        <button onClick={() => setSourceType(null)}>Back</button>
+    <div className="p-8 bg-base-200 min-h-screen">
+      <div className="flex items-center mb-8">
+        <button className="btn btn-ghost" onClick={() => setSourceType(null)}>
+          <FaArrowLeft className="mr-2" />
+          Back
+        </button>
+        <h1 className="text-3xl font-bold ml-4">
+          Select a {sourceType === "screen" ? "Screen" : "Window"}
+        </h1>
       </div>
-      <h1>Select a {sourceType === "screen" ? "Screen" : "Window"}</h1>
-      <div className="sources">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {filteredSources.length > 0 ? (
           filteredSources.map((source) => (
-            <button key={source.id} onClick={() => selectSource(source)}>
-              <img src={source.thumbnailURL} alt={source.name} />
-              <span>{source.name}</span>
-            </button>
+            <div
+              key={source.id}
+              className="card bg-base-100 shadow-xl image-full cursor-pointer transition-transform hover:scale-105"
+              onClick={() => selectSource(source)}
+            >
+              <figure>
+                <img
+                  src={source.thumbnailURL}
+                  alt={source.name}
+                  className="w-full"
+                />
+              </figure>
+              <div className="card-body justify-end p-4">
+                <h2 className="card-title text-white text-sm">{source.name}</h2>
+              </div>
+            </div>
           ))
         ) : (
-          <div className="no-sources">
-            <p>No {sourceType === "screen" ? "screens" : "windows"} found.</p>
-            <p>
+          <div className="col-span-full text-center p-8 bg-base-100 rounded-lg">
+            <h3 className="text-xl font-bold">
+              No {sourceType === "screen" ? "screens" : "windows"} found.
+            </h3>
+            <p className="mt-2 text-base-content/70">
               Please ensure you have granted screen recording permissions in
               your System Settings.
             </p>
@@ -687,92 +726,107 @@ const Recorder = ({
   }
 
   return (
-    <div className="recorder">
-      <div className="preview">
-        <video
-          ref={videoRef}
-          className="main-preview"
-          autoPlay
-          muted={recordingState !== "recorded"}
-        />
-        <video
-          ref={webcamPreviewRef}
-          className="webcam-preview"
-          autoPlay
-          muted
-          style={{ display: selectedWebcamId ? "block" : "none" }}
-        />
-      </div>
-      {recordingState === "idle" && (
-        <>
-          <div className="media-selectors">
-            <div className="audio-selector">
-              <select
-                value={selectedAudioSourceId ?? "no-audio"}
-                onChange={(e) =>
-                  setSelectedAudioSourceId(
-                    e.target.value === "no-audio" ? null : e.target.value
-                  )
-                }
-              >
-                <option value="no-audio">No Audio</option>
-                {audioSources.map((source) => (
-                  <option key={source.deviceId} value={source.deviceId}>
-                    {source.label}
-                  </option>
-                ))}
-              </select>
+    <div className="flex flex-col h-screen bg-base-100 text-base-content">
+      <div className="flex-grow p-4 flex flex-col gap-4">
+        <div className="relative w-full aspect-video bg-black rounded-lg shadow-lg flex items-center justify-center">
+          <video
+            ref={videoRef}
+            className="w-full h-full object-contain"
+            autoPlay
+            muted={recordingState !== "recorded"}
+          />
+          <video
+            ref={webcamPreviewRef}
+            className="absolute bottom-5 right-5 w-1/4 rounded-lg border-2 border-base-content/50"
+            autoPlay
+            muted
+            style={{ display: selectedWebcamId ? "block" : "none" }}
+          />
+        </div>
+
+        {recordingState === "idle" && (
+          <div className="flex flex-col gap-4 items-center">
+            <div className="flex justify-center gap-4">
+              <div className="form-control">
+                <select
+                  className="select select-bordered"
+                  value={selectedAudioSourceId ?? "no-audio"}
+                  onChange={(e) =>
+                    setSelectedAudioSourceId(
+                      e.target.value === "no-audio" ? null : e.target.value
+                    )
+                  }
+                >
+                  <option value="no-audio">No Audio</option>
+                  {audioSources.map((source) => (
+                    <option key={source.deviceId} value={source.deviceId}>
+                      {source.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-control">
+                <select
+                  className="select select-bordered"
+                  value={selectedWebcamId ?? "no-webcam"}
+                  onChange={(e) =>
+                    setSelectedWebcamId(
+                      e.target.value === "no-webcam" ? null : e.target.value
+                    )
+                  }
+                >
+                  <option value="no-webcam">No Webcam</option>
+                  {webcamSources.map((source) => (
+                    <option key={source.deviceId} value={source.deviceId}>
+                      {source.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="webcam-selector">
-              <select
-                value={selectedWebcamId ?? "no-webcam"}
-                onChange={(e) =>
-                  setSelectedWebcamId(
-                    e.target.value === "no-webcam" ? null : e.target.value
-                  )
-                }
-              >
-                <option value="no-webcam">No Webcam</option>
-                {webcamSources.map((source) => (
-                  <option key={source.deviceId} value={source.deviceId}>
-                    {source.label}
-                  </option>
-                ))}
-              </select>
+            <div className="form-control">
+              <label className="label cursor-pointer gap-2">
+                <span className="label-text">Auto Zoom & Pan</span>
+                <input
+                  type="checkbox"
+                  className="toggle toggle-primary"
+                  checked={autoZoomPan}
+                  onChange={(e) => setAutoZoomPan(e.target.checked)}
+                  disabled={!source.id.startsWith("screen")}
+                />
+              </label>
+              {!source.id.startsWith("screen") && (
+                <div className="text-xs text-base-content/50 text-center">
+                  (Screen sources only)
+                </div>
+              )}
             </div>
-          </div>
-          <div className="enhancements">
-            <label>
+            <div className="collapse bg-base-200 max-w-lg">
               <input
                 type="checkbox"
-                checked={autoZoomPan}
-                onChange={(e) => setAutoZoomPan(e.target.checked)}
-                disabled={!source.id.startsWith("screen")}
+                checked={showSettings}
+                onChange={() => setShowSettings(!showSettings)}
+                disabled={!autoZoomPan}
               />
-              Auto Zoom & Pan
-              {!source.id.startsWith("screen") && (
-                <span> (Screen sources only)</span>
-              )}
-            </label>
-          </div>
-          <div className="settings-container">
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              disabled={!autoZoomPan}
-            >
-              {showSettings ? "Hide" : "Show"} Auto-Zoom Settings
-            </button>
-            {showSettings && autoZoomPan && (
-              <div className="settings-panel">
-                <div className="setting">
-                  <label htmlFor="zoomFactor">Zoom Strength</label>
+              <div className="collapse-title text-xl font-medium flex items-center gap-2">
+                <FaCog />
+                Auto-Zoom Settings
+              </div>
+              <div className="collapse-content">
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text">Zoom Strength</span>
+                    <span className="label-text-alt">
+                      {settings.zoomFactor.toFixed(1)}x
+                    </span>
+                  </label>
                   <input
                     type="range"
-                    id="zoomFactor"
                     min="1.5"
                     max="5"
                     step="0.1"
                     value={settings.zoomFactor}
+                    className="range range-sm"
                     onChange={(e) =>
                       setSettings((s) => ({
                         ...s,
@@ -780,17 +834,21 @@ const Recorder = ({
                       }))
                     }
                   />
-                  <span>{settings.zoomFactor.toFixed(1)}x</span>
                 </div>
-                <div className="setting">
-                  <label htmlFor="animationDuration">Animation Speed</label>
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text">Animation Speed</span>
+                    <span className="label-text-alt">
+                      {settings.animationDuration}ms
+                    </span>
+                  </label>
                   <input
                     type="range"
-                    id="animationDuration"
                     min="100"
                     max="1500"
                     step="50"
                     value={settings.animationDuration}
+                    className="range range-sm"
                     onChange={(e) =>
                       setSettings((s) => ({
                         ...s,
@@ -798,17 +856,21 @@ const Recorder = ({
                       }))
                     }
                   />
-                  <span>{settings.animationDuration}ms</span>
                 </div>
-                <div className="setting">
-                  <label htmlFor="smoothing">Follow Tightness</label>
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text">Follow Tightness</span>
+                    <span className="label-text-alt">
+                      {settings.smoothing.toFixed(2)}
+                    </span>
+                  </label>
                   <input
                     type="range"
-                    id="smoothing"
                     min="0.01"
                     max="0.2"
                     step="0.01"
                     value={settings.smoothing}
+                    className="range range-sm"
                     onChange={(e) =>
                       setSettings((s) => ({
                         ...s,
@@ -816,17 +878,21 @@ const Recorder = ({
                       }))
                     }
                   />
-                  <span>{settings.smoothing.toFixed(2)}</span>
                 </div>
-                <div className="setting">
-                  <label htmlFor="inactivityTimeout">Inactivity Timeout</label>
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text">Inactivity Timeout</span>
+                    <span className="label-text-alt">
+                      {(settings.inactivityTimeout / 1000).toFixed(1)}s
+                    </span>
+                  </label>
                   <input
                     type="range"
-                    id="inactivityTimeout"
                     min="500"
                     max="5000"
                     step="100"
                     value={settings.inactivityTimeout}
+                    className="range range-sm"
                     onChange={(e) =>
                       setSettings((s) => ({
                         ...s,
@@ -834,37 +900,59 @@ const Recorder = ({
                       }))
                     }
                   />
-                  <span>{(settings.inactivityTimeout / 1000).toFixed(1)}s</span>
                 </div>
               </div>
-            )}
+            </div>
           </div>
-        </>
-      )}
-      <div className="controls">
+        )}
+      </div>
+
+      <div className="p-4 bg-base-300 flex justify-center items-center gap-4">
         {recordingState === "idle" && (
-          <button onClick={startRecording}>Start</button>
+          <button className="btn btn-primary btn-lg" onClick={startRecording}>
+            <FaPlay className="mr-2" /> Start Recording
+          </button>
         )}
         {recordingState === "recording" && (
           <>
-            <button onClick={pauseRecording}>Pause</button>
-            <button onClick={stopRecording}>Stop</button>
+            <button className="btn btn-warning" onClick={pauseRecording}>
+              <FaPause className="mr-2" /> Pause
+            </button>
+            <button className="btn btn-error" onClick={stopRecording}>
+              <FaStop className="mr-2" /> Stop
+            </button>
           </>
         )}
         {recordingState === "paused" && (
           <>
-            <button onClick={resumeRecording}>Resume</button>
-            <button onClick={stopRecording}>Stop</button>
+            <button className="btn btn-success" onClick={resumeRecording}>
+              <FaPlay className="mr-2" /> Resume
+            </button>
+            <button className="btn btn-error" onClick={stopRecording}>
+              <FaStop className="mr-2" /> Stop
+            </button>
           </>
         )}
         {recordingState === "recorded" && (
           <>
-            <button onClick={handleSave}>Save</button>
-            <button onClick={recordAgain}>Record Again</button>
-            <button onClick={() => setShowEditor(true)}>Edit</button>
+            <button className="btn btn-success" onClick={handleSave}>
+              <FaSave className="mr-2" /> Save
+            </button>
+            <button className="btn" onClick={recordAgain}>
+              <FaRedo className="mr-2" /> Record Again
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowEditor(true)}
+            >
+              <FaEdit className="mr-2" /> Edit
+            </button>
           </>
         )}
-        <button onClick={clearSource}>Choose another source</button>
+        <button className="btn btn-ghost" onClick={clearSource}>
+          <FaArrowLeft className="mr-2" />
+          Choose another source
+        </button>
       </div>
     </div>
   );
