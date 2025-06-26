@@ -195,6 +195,25 @@ const Recorder = ({
       (recordingState === "recording" || recordingState === "paused")
     ) {
       const handleMouseActivity = (position: { x: number; y: number }) => {
+        // For screen recordings, check if the click is within the selected display
+        if (source.id.startsWith("screen")) {
+          const displayId = parseInt(source.id.split(":")[1], 10);
+          const display = displays.find((d) => d.id === displayId);
+          if (display) {
+            const { x, y, width, height } = display.bounds;
+            if (
+              position.x < x ||
+              position.x > x + width ||
+              position.y < y ||
+              position.y > y + height
+            ) {
+              // Cursor is outside the selected display, so don't trigger the zoom.
+              return;
+            }
+          }
+        }
+        // For window recordings, we cannot easily get bounds, so zoom will trigger on any click.
+
         cursorPositionRef.current = position;
 
         if (!isZoomedInRef.current) {
@@ -385,7 +404,8 @@ const Recorder = ({
         };
       }
 
-      const smoothing = 0.1;
+      // A lower value creates a smoother, slower transition.
+      const smoothing = 0.05;
       sourceRectRef.current.sx +=
         (targetSx - sourceRectRef.current.sx) * smoothing;
       sourceRectRef.current.sy +=
