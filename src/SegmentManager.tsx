@@ -99,13 +99,15 @@ const SegmentManager = ({
 
   if (segments.length === 0) {
     return (
-      <div className={`bg-base-200 rounded-lg p-6 text-center ${className}`}>
+      <div className={`glass rounded-xl p-8 text-center ${className}`}>
         <div className="text-base-content/70">
-          <FaLayerGroup className="mx-auto mb-2 text-3xl" />
-          <div className="text-lg font-semibold mb-1">
+          <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <FaLayerGroup className="text-2xl text-accent" />
+          </div>
+          <div className="text-lg font-semibold mb-2">
             No segments to manage
           </div>
-          <div className="text-sm">
+          <div className="text-sm text-base-content/60">
             Create some clips first to see segments here
           </div>
         </div>
@@ -114,19 +116,26 @@ const SegmentManager = ({
   }
 
   return (
-    <div className={`bg-base-200 rounded-lg p-4 ${className}`}>
-      <div className="flex items-center justify-between mb-4">
+    <div className={`glass rounded-xl p-6 ${className}`}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h3 className="text-lg font-semibold">Video Segments</h3>
-          <p className="text-sm text-base-content/70">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <span className="w-8 h-8 bg-accent/20 rounded-lg flex items-center justify-center">
+              <FaLayerGroup className="text-accent text-sm" />
+            </span>
+            Video Segments
+          </h3>
+          <p className="text-sm text-base-content/70 mt-1">
             {segments.length} segment{segments.length !== 1 ? "s" : ""} • Total
             duration: {formatTime(getTotalDuration())}
           </p>
         </div>
-        <div className="text-xs text-base-content/50">Drag to reorder</div>
+        <div className="badge badge-ghost badge-sm">
+          <span className="text-xs">Drag to reorder</span>
+        </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {sortedSegments.map((segment, index) => (
           <div
             key={segment.id}
@@ -136,7 +145,7 @@ const SegmentManager = ({
             onDragEnd={handleDragEnd}
             onDrop={(e) => handleDrop(e, index)}
             className={`
-              flex items-center gap-3 p-3 bg-base-100 rounded-lg border transition-all duration-200
+              flex items-center gap-4 p-4 glass rounded-xl border transition-all duration-300 cursor-move
               ${
                 draggedIndex === index
                   ? "opacity-50 transform scale-95"
@@ -144,35 +153,35 @@ const SegmentManager = ({
               }
               ${
                 dragOverIndex === index && draggedIndex !== index
-                  ? "border-primary border-2 bg-primary/5"
-                  : "border-base-300"
+                  ? "border-primary border-2 bg-primary/10 glow-primary"
+                  : "border-base-300/50"
               }
-              hover:border-primary hover:shadow-md cursor-move
+              hover:border-primary/50 hover:shadow-lg hover:bg-base-200/30
             `}
           >
             {/* Drag Handle */}
-            <div className="text-base-content/40 hover:text-base-content/80 transition-colors">
-              <FaGripVertical />
+            <div className="text-base-content/40 hover:text-base-content/80 transition-colors p-1">
+              <FaGripVertical className="text-lg" />
             </div>
 
             {/* Segment Info */}
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="badge badge-primary badge-sm">
-                  {index + 1}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="badge badge-primary badge-sm font-medium">
+                  #{index + 1}
                 </span>
-                <span className="font-mono text-sm">
+                <span className="font-mono text-sm font-medium">
                   {formatTime(segment.start)} - {formatTime(segment.end)}
                 </span>
-                <span className="text-xs text-base-content/60">
-                  ({formatTime(segment.end - segment.start)})
+                <span className="text-xs text-base-content/60 bg-base-300/30 px-2 py-1 rounded">
+                  {formatTime(segment.end - segment.start)}
                 </span>
               </div>
 
               {/* Visual Timeline */}
-              <div className="mt-2 relative h-2 bg-base-300 rounded-full overflow-hidden">
+              <div className="relative h-3 bg-base-300/50 rounded-full overflow-hidden">
                 <div
-                  className="absolute h-full bg-primary rounded-full"
+                  className="absolute h-full bg-gradient-to-r from-primary to-primary-focus rounded-full transition-all duration-300"
                   style={{
                     left: `${(segment.start / duration) * 100}%`,
                     width: `${
@@ -180,24 +189,28 @@ const SegmentManager = ({
                     }%`,
                   }}
                 />
+                {/* Timeline markers */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-1 h-1 bg-white/80 rounded-full"></div>
+                </div>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex gap-1">
+            <div className="flex gap-2">
               <button
-                className="btn btn-ghost btn-xs"
+                className="btn btn-ghost btn-sm btn-circle hover:bg-primary/20 hover:text-primary"
                 onClick={() => onPreviewSegment?.(segment)}
                 title="Preview segment"
               >
-                <FaPlay />
+                <FaPlay className="text-xs" />
               </button>
               <button
-                className="btn btn-ghost btn-xs text-error hover:bg-error hover:text-error-content"
+                className="btn btn-ghost btn-sm btn-circle hover:bg-error/20 hover:text-error text-error/70"
                 onClick={() => handleRemoveSegment(segment.id)}
                 title="Remove segment"
               >
-                <FaTrash />
+                <FaTrash className="text-xs" />
               </button>
             </div>
           </div>
@@ -205,18 +218,30 @@ const SegmentManager = ({
       </div>
 
       {/* Summary */}
-      <div className="mt-4 p-3 bg-base-100 rounded-lg border border-base-300">
-        <div className="text-sm text-base-content/70">
+      <div className="mt-6 glass rounded-xl p-4 border border-primary/20">
+        <h4 className="font-semibold mb-3 flex items-center gap-2">
+          <span className="w-5 h-5 bg-primary/20 rounded-md flex items-center justify-center">
+            <span className="text-primary text-xs">📊</span>
+          </span>
+          Export Summary
+        </h4>
+        <div className="space-y-2 text-sm">
           <div className="flex justify-between items-center">
-            <span>Final video duration:</span>
-            <span className="font-mono font-semibold">
+            <span className="text-base-content/70">Final video duration:</span>
+            <span className="font-mono font-semibold text-primary">
               {formatTime(getTotalDuration())}
             </span>
           </div>
-          <div className="flex justify-between items-center mt-1">
-            <span>Removed from original:</span>
-            <span className="font-mono">
+          <div className="flex justify-between items-center">
+            <span className="text-base-content/70">Removed from original:</span>
+            <span className="font-mono text-error">
               {formatTime(duration - getTotalDuration())}
+            </span>
+          </div>
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-base-content/50">Compression ratio:</span>
+            <span className="font-mono">
+              {((getTotalDuration() / duration) * 100).toFixed(1)}%
             </span>
           </div>
         </div>

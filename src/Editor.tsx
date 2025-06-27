@@ -614,191 +614,325 @@ const Editor = ({ videoUrl, onBack }: EditorProps) => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-base-100 text-base-content">
-      <div className="navbar bg-base-300">
-        <div className="flex-1">
-          <button className="btn btn-ghost text-xl" onClick={onBack}>
-            <FaArrowLeft className="mr-2" />
-            Back to Recorder
-          </button>
-        </div>
-        <div className="flex-none flex gap-2">
-          {/* Mode Toggle */}
-          <div className="btn-group">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-base-100 via-base-200 to-base-300 opacity-20"></div>
+
+      {/* Header */}
+      <div className="relative z-10 p-4 lg:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* Left side - Back button and title */}
+          <div className="flex items-center gap-4">
             <button
-              className={`btn btn-sm ${
-                timelineMode === "trim" ? "btn-primary" : "btn-ghost"
-              }`}
-              onClick={() => setTimelineMode("trim")}
-              disabled={isProcessing}
+              className="btn btn-ghost btn-circle hover:bg-base-300/50 transition-smooth focus-modern"
+              onClick={onBack}
             >
-              <FaCut className="mr-1" />
-              Trim
+              <FaArrowLeft className="text-lg" />
             </button>
-            <button
-              className={`btn btn-sm ${
-                timelineMode === "clip" ? "btn-primary" : "btn-ghost"
-              }`}
-              onClick={() => setTimelineMode("clip")}
-              disabled={isProcessing}
-            >
-              <FaTimes className="mr-1" />
-              Clip
-            </button>
+            <div>
+              <h1 className="text-xl lg:text-2xl font-bold text-base-content">
+                Video Editor
+              </h1>
+              <p className="text-sm lg:text-base text-base-content/70">
+                Trim and clip your video with precision
+              </p>
+            </div>
           </div>
 
-          {/* Segment Manager Toggle - only show when in clip mode and have segments */}
-          {timelineMode === "clip" && videoSegments.length > 0 && (
-            <button
-              className={`btn btn-sm ${
-                showSegmentManager ? "btn-active" : "btn-ghost"
-              }`}
-              onClick={() => setShowSegmentManager(!showSegmentManager)}
-              disabled={isProcessing}
-            >
-              <FaLayerGroup className="mr-1" />
-              {showSegmentManager ? "Hide" : "Show"} Segments
-            </button>
-          )}
+          {/* Right side - Mode toggle and action buttons */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Mode Toggle */}
+            <div className="btn-group">
+              <button
+                className={`btn btn-sm btn-modern ${
+                  timelineMode === "trim"
+                    ? "btn-primary glow-primary"
+                    : "btn-ghost"
+                }`}
+                onClick={() => setTimelineMode("trim")}
+                disabled={isProcessing}
+              >
+                <FaCut className="mr-1" />
+                Trim
+              </button>
+              <button
+                className={`btn btn-sm btn-modern ${
+                  timelineMode === "clip"
+                    ? "btn-primary glow-primary"
+                    : "btn-ghost"
+                }`}
+                onClick={() => setTimelineMode("clip")}
+                disabled={isProcessing}
+              >
+                <FaTimes className="mr-1" />
+                Clip
+              </button>
+            </div>
 
-          <button
-            className="btn btn-primary"
-            onClick={timelineMode === "trim" ? handleTrim : handleClip}
-            disabled={
-              isProcessing ||
-              !ffmpeg ||
-              (timelineMode === "trim"
-                ? trimEnd <= trimStart
-                : clipRanges.length === 0)
-            }
-          >
-            <FaSave className="mr-2" />
-            {isProcessing
-              ? "Processing..."
-              : timelineMode === "trim"
-              ? "Trim"
-              : "Apply Clips"}
-          </button>
-          {editedVideoUrl && (
-            <>
+            {/* Action buttons */}
+            <div className="flex gap-2">
+              {/* Segment Manager Toggle - only show when in clip mode and have segments */}
+              {timelineMode === "clip" && videoSegments.length > 0 && (
+                <button
+                  className={`btn btn-sm btn-modern ${
+                    showSegmentManager ? "btn-active glow-accent" : "btn-ghost"
+                  }`}
+                  onClick={() => setShowSegmentManager(!showSegmentManager)}
+                  disabled={isProcessing}
+                >
+                  <FaLayerGroup className="mr-1" />
+                  {showSegmentManager ? "Hide" : "Show"} Segments
+                </button>
+              )}
+
               <button
-                className="btn btn-success"
-                onClick={handleDownload}
-                disabled={isProcessing}
+                className="btn btn-primary btn-modern glow-primary"
+                onClick={timelineMode === "trim" ? handleTrim : handleClip}
+                disabled={
+                  isProcessing ||
+                  !ffmpeg ||
+                  (timelineMode === "trim"
+                    ? trimEnd <= trimStart
+                    : clipRanges.length === 0)
+                }
               >
-                <FaDownload className="mr-2" />
-                Download
+                <FaSave className="mr-2" />
+                {isProcessing
+                  ? "Processing..."
+                  : timelineMode === "trim"
+                  ? "Apply Trim"
+                  : "Apply Clips"}
               </button>
-              <button
-                className="btn btn-ghost"
-                onClick={handleReset}
-                disabled={isProcessing}
-              >
-                <FaUndo className="mr-2" />
-                Reset
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-      <div className="flex-grow flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-4xl">
-          <VideoPlayer
-            ref={videoRef}
-            src={editedVideoUrl ?? videoUrl}
-            className="w-full rounded-lg shadow-2xl"
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            onTimeUpdate={handleTimeUpdate}
-            onDurationChange={handleDurationChange}
-            onReady={handleVideoReady}
-            muted={false}
-            controls={false}
-          />
-          <div className="p-4 bg-base-200 rounded-b-lg">
-            <div className="flex justify-center items-center gap-4">
-              <button
-                className="btn btn-ghost btn-circle"
-                onClick={() => {
-                  if (videoRef.current) {
-                    const currentTime = videoRef.current.getCurrentTime();
-                    videoRef.current.setCurrentTime(
-                      Math.max(0, currentTime - 5)
-                    );
-                  }
-                }}
-              >
-                <FaBackward size="1.5em" />
-              </button>
-              <button
-                className="btn btn-primary btn-circle btn-lg"
-                onClick={handlePlayPause}
-              >
-                {isPlaying ? <FaPause size="1.5em" /> : <FaPlay size="1.5em" />}
-              </button>
-              <button
-                className="btn btn-ghost btn-circle"
-                onClick={() => {
-                  if (videoRef.current) {
-                    const currentTime = videoRef.current.getCurrentTime();
-                    videoRef.current.setCurrentTime(currentTime + 5);
-                  }
-                }}
-              >
-                <FaForward size="1.5em" />
-              </button>
+
+              {editedVideoUrl && (
+                <>
+                  <button
+                    className="btn btn-success btn-modern glow-accent"
+                    onClick={handleDownload}
+                    disabled={isProcessing}
+                  >
+                    <FaDownload className="mr-2" />
+                    Download
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-modern"
+                    onClick={handleReset}
+                    disabled={isProcessing}
+                  >
+                    <FaUndo className="mr-2" />
+                    Reset
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
-        <div className="mt-4 w-full max-w-4xl">
-          {/* Debug info */}
-          <div className="mb-2 text-sm text-gray-500">
-            Duration: {duration > 0 ? `${duration.toFixed(1)}s` : "Loading..."}{" "}
-            | Current: {currentTime.toFixed(1)}s
-            {timelineMode === "trim" ? (
-              <>
-                {" "}
-                | Selection: {trimStart.toFixed(1)}s - {trimEnd.toFixed(1)}s
-              </>
-            ) : (
-              <>
-                {" "}
-                | Clips: {clipRanges.length} ranges to remove
-                {showSegmentManager && ` | Segments: ${videoSegments.length}`}
-              </>
-            )}
+      </div>
+
+      {/* Main Content - Scrollable */}
+      <div className="relative z-10 flex-1 overflow-y-auto">
+        <div className="container mx-auto px-4 lg:px-6 pb-8">
+          {/* Video Player Section */}
+          <div className="card-modern p-6 mb-6">
+            <div className="flex flex-col lg:flex-row gap-6">
+              {/* Video Player */}
+              <div className="flex-1">
+                <div className="relative glass rounded-2xl overflow-hidden shadow-2xl">
+                  <VideoPlayer
+                    ref={videoRef}
+                    src={editedVideoUrl ?? videoUrl}
+                    className="w-full aspect-video object-contain"
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                    onTimeUpdate={handleTimeUpdate}
+                    onDurationChange={handleDurationChange}
+                    onReady={handleVideoReady}
+                    muted={false}
+                    controls={false}
+                  />
+                </div>
+
+                {/* Video Controls */}
+                <div className="mt-4 glass rounded-xl p-4">
+                  <div className="flex justify-center items-center gap-4">
+                    <button
+                      className="btn btn-ghost btn-circle btn-modern hover:bg-base-300/50"
+                      onClick={() => {
+                        if (videoRef.current) {
+                          const currentTime = videoRef.current.getCurrentTime();
+                          videoRef.current.setCurrentTime(
+                            Math.max(0, currentTime - 5)
+                          );
+                        }
+                      }}
+                      title="Skip back 5 seconds"
+                    >
+                      <FaBackward size="1.2em" />
+                    </button>
+                    <button
+                      className="btn btn-primary btn-circle btn-lg btn-modern glow-primary"
+                      onClick={handlePlayPause}
+                      title="Play/Pause (Space)"
+                    >
+                      {isPlaying ? (
+                        <FaPause size="1.5em" />
+                      ) : (
+                        <FaPlay size="1.5em" />
+                      )}
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-circle btn-modern hover:bg-base-300/50"
+                      onClick={() => {
+                        if (videoRef.current) {
+                          const currentTime = videoRef.current.getCurrentTime();
+                          videoRef.current.setCurrentTime(currentTime + 5);
+                        }
+                      }}
+                      title="Skip forward 5 seconds"
+                    >
+                      <FaForward size="1.2em" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Info Panel */}
+              <div className="w-full lg:w-80 space-y-4">
+                <div className="glass rounded-xl p-4">
+                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                    <span className="w-6 h-6 bg-primary/20 rounded-md flex items-center justify-center">
+                      <span className="text-primary text-xs">📊</span>
+                    </span>
+                    Video Info
+                  </h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-base-content/70">Duration:</span>
+                      <span className="font-mono font-medium">
+                        {duration > 0 ? formatTime(duration) : "Loading..."}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-base-content/70">Current:</span>
+                      <span className="font-mono font-medium">
+                        {formatTime(currentTime)}
+                      </span>
+                    </div>
+                    {timelineMode === "trim" && (
+                      <>
+                        <div className="divider my-2"></div>
+                        <div className="flex justify-between">
+                          <span className="text-base-content/70">
+                            Selection:
+                          </span>
+                          <span className="font-mono font-medium text-primary">
+                            {formatTime(trimEnd - trimStart)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-base-content/50">Range:</span>
+                          <span className="font-mono">
+                            {formatTime(trimStart)} - {formatTime(trimEnd)}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    {timelineMode === "clip" && (
+                      <>
+                        <div className="divider my-2"></div>
+                        <div className="flex justify-between">
+                          <span className="text-base-content/70">
+                            Clips to remove:
+                          </span>
+                          <span className="font-mono font-medium text-error">
+                            {clipRanges.length}
+                          </span>
+                        </div>
+                        {clipRanges.length > 0 && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-base-content/50">
+                              Total removed:
+                            </span>
+                            <span className="font-mono">
+                              {formatTime(
+                                clipRanges.reduce(
+                                  (sum, clip) => sum + (clip.end - clip.start),
+                                  0
+                                )
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {showSegmentManager && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-base-content/50">
+                              Segments:
+                            </span>
+                            <span className="font-mono">
+                              {videoSegments.length}
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Mode Info */}
+                <div className="glass rounded-xl p-4">
+                  <h3 className="text-base font-semibold mb-2 flex items-center gap-2">
+                    <span className="w-5 h-5 bg-accent/20 rounded-md flex items-center justify-center">
+                      {timelineMode === "trim" ? (
+                        <FaCut className="text-accent text-xs" />
+                      ) : (
+                        <FaTimes className="text-accent text-xs" />
+                      )}
+                    </span>
+                    {timelineMode === "trim" ? "Trim Mode" : "Clip Mode"}
+                  </h3>
+                  <p className="text-xs text-base-content/70">
+                    {timelineMode === "trim"
+                      ? "Select the portion of video you want to keep"
+                      : "Mark multiple ranges to remove from your video"}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <Timeline
-            duration={duration}
-            currentTime={currentTime}
-            trimStart={trimStart}
-            trimEnd={trimEnd}
-            onTrimChange={(start, end) => {
-              console.log("Trim change:", start, end);
-              setTrimStart(start);
-              setTrimEnd(end);
-            }}
-            onTimeChange={(time) => {
-              console.log("Time change:", time);
-              if (videoRef.current) {
-                videoRef.current.setCurrentTime(time);
-                setCurrentTime(time);
-              }
-            }}
-            isPlaying={isPlaying}
-            onPlayPause={handlePlayPause}
-            mode={timelineMode}
-            clipRanges={clipRanges}
-            onClipRangesChange={(ranges) => {
-              console.log("Clip ranges changed:", ranges);
-              setClipRanges(ranges);
-            }}
-          />
+          {/* Timeline Section */}
+          <div className="card-modern p-6 mb-6">
+            <Timeline
+              duration={duration}
+              currentTime={currentTime}
+              trimStart={trimStart}
+              trimEnd={trimEnd}
+              onTrimChange={(start, end) => {
+                console.log("Trim change:", start, end);
+                setTrimStart(start);
+                setTrimEnd(end);
+              }}
+              onTimeChange={(time) => {
+                console.log("Time change:", time);
+                if (videoRef.current) {
+                  videoRef.current.setCurrentTime(time);
+                  setCurrentTime(time);
+                }
+              }}
+              isPlaying={isPlaying}
+              onPlayPause={handlePlayPause}
+              mode={timelineMode}
+              clipRanges={clipRanges}
+              onClipRangesChange={(ranges) => {
+                console.log("Clip ranges changed:", ranges);
+                setClipRanges(ranges);
+              }}
+            />
+          </div>
 
           {/* Segment Manager - only show in clip mode when there are segments */}
           {showSegmentManager && timelineMode === "clip" && (
-            <div className="mt-4">
+            <div className="card-modern p-6 mb-6">
               <SegmentManager
                 segments={videoSegments}
                 onSegmentsChange={setVideoSegments}
@@ -807,100 +941,62 @@ const Editor = ({ videoUrl, onBack }: EditorProps) => {
               />
             </div>
           )}
-
-          {/* Manual controls for testing */}
-          <div className="mt-2 flex gap-2">
-            <button
-              className="btn btn-xs"
-              onClick={() => {
-                if (videoRef.current) {
-                  const dur = videoRef.current.getDuration();
-                  console.log("Manual duration check:", dur);
-                  if (dur && isFinite(dur) && dur !== Infinity) {
-                    setDuration(dur);
-                    setTrimStart(0);
-                    setTrimEnd(dur);
-                    setIsDurationSet(true);
-                  }
-                }
-              }}
-            >
-              Force Set Duration
-            </button>
-            <button
-              className="btn btn-xs"
-              onClick={async () => {
-                if (videoRef.current) {
-                  console.log("Trying to refresh video player...");
-
-                  // The VideoPlayer should handle duration detection automatically
-                  // Let's just trigger a manual check
-                  setTimeout(() => {
-                    const dur = videoRef.current?.getDuration();
-                    if (dur && dur > 0) {
-                      console.log("Refreshed duration:", dur);
-                      setDuration(dur);
-                      setTrimStart(0);
-                      setTrimEnd(dur);
-                      setIsDurationSet(true);
-                    }
-                  }, 500);
-                }
-              }}
-            >
-              Refresh Player
-            </button>
-            <button
-              className="btn btn-xs"
-              onClick={() => {
-                // Reset everything to start fresh
-                setIsDurationSet(false);
-                setDuration(0);
-                setTrimStart(0);
-                setTrimEnd(0);
-                setCurrentTime(0);
-              }}
-            >
-              Reset All
-            </button>
-          </div>
         </div>
       </div>
+
+      {/* Processing Modal */}
       {(isProcessing || (progress > 0 && progress < 100)) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="card w-96 bg-base-100 shadow-xl">
-            <div className="card-body">
-              <h2 className="card-title">Processing Video...</h2>
-              <p className="text-sm text-base-content/70 mb-4">
-                {timelineMode === "trim" ? (
-                  <>
-                    Trimming from {formatTime(trimStart)} to{" "}
-                    {formatTime(trimEnd)}
-                    <br />
-                    Duration: {formatTime(trimEnd - trimStart)}
-                  </>
-                ) : (
-                  <>
-                    Removing {clipRanges.length} clip
-                    {clipRanges.length !== 1 ? "s" : ""}
-                    <br />
-                    Total removed:{" "}
-                    {formatTime(
-                      clipRanges.reduce(
-                        (sum, clip) => sum + (clip.end - clip.start),
-                        0
-                      )
-                    )}
-                  </>
-                )}
-              </p>
-              <progress
-                className="progress progress-primary w-full"
-                value={progress}
-                max="100"
-              ></progress>
-              <div className="text-center text-sm text-base-content/70 mt-2">
-                {progress > 0 ? `${progress}%` : "Preparing..."}
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="card-modern max-w-md w-full mx-4">
+            <div className="card-body p-6">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="loading loading-spinner loading-lg text-primary"></div>
+                </div>
+                <h2 className="text-xl font-bold mb-2">Processing Video</h2>
+                <p className="text-sm text-base-content/70">
+                  {timelineMode === "trim" ? (
+                    <>
+                      Trimming from {formatTime(trimStart)} to{" "}
+                      {formatTime(trimEnd)}
+                      <br />
+                      <span className="text-primary font-medium">
+                        Duration: {formatTime(trimEnd - trimStart)}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      Removing {clipRanges.length} clip
+                      {clipRanges.length !== 1 ? "s" : ""}
+                      <br />
+                      <span className="text-error font-medium">
+                        Total removed:{" "}
+                        {formatTime(
+                          clipRanges.reduce(
+                            (sum, clip) => sum + (clip.end - clip.start),
+                            0
+                          )
+                        )}
+                      </span>
+                    </>
+                  )}
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <progress
+                  className="progress progress-primary w-full h-3"
+                  value={progress}
+                  max="100"
+                ></progress>
+                <div className="flex justify-between text-sm">
+                  <span className="text-base-content/60">
+                    {progress > 0 ? `${progress}%` : "Preparing..."}
+                  </span>
+                  <span className="text-base-content/60">
+                    {progress > 0 ? "Processing" : "Starting up"}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
