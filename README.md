@@ -30,7 +30,7 @@ Here is a step-by-step plan for the features we will build:
 
 ### Phase 3: Post-Recording Video Editor
 
-10. **Video Trimming**: Implement basic video editing to trim the start and end of recordings.
+10. **Video Trimming and Clipping**: Implement basic video editing to trim the start and end of recordings.
 11. **Background Styling**: Add padding, blur, or custom image backgrounds to the video.
 12. **Video Annotations**: Add text, shapes, and other annotations on top of the recorded video.
 13. **Export Options**: Allow users to save recordings in different formats (e.g., MP4, WebM, GIF).
