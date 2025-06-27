@@ -1,6 +1,15 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import { FaPlay, FaPause, FaCut } from "react-icons/fa";
+import { FaPlay, FaPause, FaCut, FaTimes } from "react-icons/fa";
 import "./Timeline.css";
+
+// New types for clipping functionality
+type ClipRange = {
+  id: string;
+  start: number;
+  end: number;
+};
+
+type TimelineMode = "trim" | "clip";
 
 type TimelineProps = {
   duration: number;
@@ -11,6 +20,10 @@ type TimelineProps = {
   onTimeChange: (time: number) => void;
   isPlaying?: boolean;
   onPlayPause?: () => void;
+  // New clipping props
+  mode?: TimelineMode;
+  clipRanges?: ClipRange[];
+  onClipRangesChange?: (ranges: ClipRange[]) => void;
 };
 
 const formatTime = (seconds: number): string => {
@@ -31,15 +44,29 @@ const TimelineComponent = ({
   onTimeChange,
   isPlaying = false,
   onPlayPause,
+  mode = "trim",
+  clipRanges = [],
+  onClipRangesChange,
 }: TimelineProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState<
-    "playhead" | "start" | "end" | null
+    "playhead" | "start" | "end" | "clip-start" | "clip-end" | null
   >(null);
   const [hoverPosition, setHoverPosition] = useState<number | null>(null);
-  const dragStateRef = useRef<"playhead" | "start" | "end" | null>(null);
+  const dragStateRef = useRef<
+    "playhead" | "start" | "end" | "clip-start" | "clip-end" | null
+  >(null);
+
+  // Track which clip is being dragged
+  const [draggedClipId, setDraggedClipId] = useState<string | null>(null);
   const [localTrimStart, setLocalTrimStart] = useState(trimStart);
   const [localTrimEnd, setLocalTrimEnd] = useState(trimEnd);
+
+  // Clipping state
+  const [isSelectingClip, setIsSelectingClip] = useState(false);
+  const [clipSelectionStart, setClipSelectionStart] = useState<number | null>(
+    null
+  );
 
   // Update local state when props change (but not during dragging)
   useEffect(() => {
@@ -68,7 +95,12 @@ const TimelineComponent = ({
   );
 
   const handleMouseDown = useCallback(
-    (e: React.MouseEvent, type: "playhead" | "start" | "end") => {
+    (
+      e: React.MouseEvent,
+      type: "playhead" | "start" | "end" | "clip-start" | "clip-end",
+      clipId?: string
+    ) => {
+      console.log("Mouse down:", type, clipId);
       e.preventDefault();
       e.stopPropagation();
 
@@ -77,6 +109,11 @@ const TimelineComponent = ({
 
       dragStateRef.current = type;
       setIsDragging(type);
+
+      if (clipId) {
+        setDraggedClipId(clipId);
+        console.log("Set dragged clip ID:", clipId);
+      }
     },
     []
   );
@@ -116,12 +153,102 @@ const TimelineComponent = ({
             setLocalTrimEnd(newEnd);
             break;
           }
+          case "clip-start": {
+            if (draggedClipId) {
+              const clip = clipRanges.find((c) => c.id === draggedClipId);
+              if (clip) {
+                const newStart = Math.max(0, Math.min(time, clip.end - 0.1));
+                console.log(
+                  "Dragging clip start:",
+                  draggedClipId,
+                  "from",
+                  clip.start,
+                  "to",
+                  newStart
+                );
+                const updatedRanges = clipRanges.map((c) =>
+                  c.id === draggedClipId ? { ...c, start: newStart } : c
+                );
+                onClipRangesChange?.(updatedRanges);
+                // Update video position for preview
+                onTimeChange(newStart);
+              }
+            } else {
+              console.log("No dragged clip ID for clip-start");
+            }
+            break;
+          }
+          case "clip-end": {
+            if (draggedClipId) {
+              const clip = clipRanges.find((c) => c.id === draggedClipId);
+              if (clip) {
+                const newEnd = Math.min(
+                  duration,
+                  Math.max(time, clip.start + 0.1)
+                );
+                console.log(
+                  "Dragging clip end:",
+                  draggedClipId,
+                  "from",
+                  clip.end,
+                  "to",
+                  newEnd
+                );
+                const updatedRanges = clipRanges.map((c) =>
+                  c.id === draggedClipId ? { ...c, end: newEnd } : c
+                );
+                onClipRangesChange?.(updatedRanges);
+                // Update video position for preview
+                onTimeChange(newEnd);
+              }
+            } else {
+              console.log("No dragged clip ID for clip-end");
+            }
+            break;
+          }
         }
       } else {
-        setHoverPosition(time);
+        // Only set hover position if we're not over a clip handle
+        const isOverClipHandle =
+          mode === "clip" &&
+          clipRanges.some((clip) => {
+            const startPos = getPositionFromTime(clip.start);
+            const endPos = getPositionFromTime(clip.end);
+            const currentPos = getPositionFromTime(time);
+            // Check if we're within handle range (±2% for better UX)
+            return (
+              Math.abs(currentPos - startPos) < 2 ||
+              Math.abs(currentPos - endPos) < 2
+            );
+          });
+
+        if (!isOverClipHandle) {
+          setHoverPosition(time);
+
+          // During clip selection, seek to hover position for preview
+          if (
+            mode === "clip" &&
+            isSelectingClip &&
+            clipSelectionStart !== null
+          ) {
+            onTimeChange(time);
+          }
+        }
       }
     },
-    [getTimeFromPosition, onTimeChange, localTrimStart, localTrimEnd, duration]
+    [
+      getTimeFromPosition,
+      onTimeChange,
+      localTrimStart,
+      localTrimEnd,
+      duration,
+      clipRanges,
+      onClipRangesChange,
+      draggedClipId,
+      mode,
+      isSelectingClip,
+      clipSelectionStart,
+    ]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -129,12 +256,13 @@ const TimelineComponent = ({
     document.body.style.userSelect = "";
 
     // Commit the local changes to the parent
-    if (dragStateRef.current) {
+    if (dragStateRef.current === "start" || dragStateRef.current === "end") {
       onTrimChange(localTrimStart, localTrimEnd);
     }
 
     dragStateRef.current = null;
     setIsDragging(null);
+    setDraggedClipId(null);
   }, [localTrimStart, localTrimEnd, onTrimChange]);
 
   const handleTimelineClick = useCallback(
@@ -147,7 +275,40 @@ const TimelineComponent = ({
       }
 
       const time = getTimeFromPosition(e.clientX);
-      onTimeChange(Math.max(localTrimStart, Math.min(localTrimEnd, time)));
+
+      if (mode === "clip" && isSelectingClip) {
+        // Complete clip selection
+        if (clipSelectionStart !== null) {
+          const start = Math.min(clipSelectionStart, time);
+          const end = Math.max(clipSelectionStart, time);
+
+          if (end - start > 0.1) {
+            // Minimum clip duration
+            const newClip: ClipRange = {
+              id: `clip_${Date.now()}`,
+              start,
+              end,
+            };
+
+            const updatedRanges = [...clipRanges, newClip].sort(
+              (a, b) => a.start - b.start
+            );
+            onClipRangesChange?.(updatedRanges);
+          }
+
+          setIsSelectingClip(false);
+          setClipSelectionStart(null);
+        }
+      } else if (mode === "clip" && !isSelectingClip) {
+        // Start clip selection
+        setIsSelectingClip(true);
+        setClipSelectionStart(time);
+        // Seek to start position for preview
+        onTimeChange(time);
+      } else {
+        // Normal time change for trim mode
+        onTimeChange(Math.max(localTrimStart, Math.min(localTrimEnd, time)));
+      }
     },
     [
       isDragging,
@@ -155,6 +316,11 @@ const TimelineComponent = ({
       onTimeChange,
       localTrimStart,
       localTrimEnd,
+      mode,
+      isSelectingClip,
+      clipSelectionStart,
+      clipRanges,
+      onClipRangesChange,
     ]
   );
 
@@ -202,6 +368,14 @@ const TimelineComponent = ({
           e.preventDefault();
           setLocalTrimEnd(currentTime);
           onTrimChange(localTrimStart, currentTime);
+          break;
+        case "Escape":
+          e.preventDefault();
+          // Cancel clip selection if in progress
+          if (mode === "clip" && isSelectingClip) {
+            setIsSelectingClip(false);
+            setClipSelectionStart(null);
+          }
           break;
       }
     },
@@ -287,10 +461,30 @@ const TimelineComponent = ({
         </div>
 
         <div className="trim-display">
-          <FaCut className="scissors-icon" />
-          <span className="trim-time">
-            {formatTime(localTrimEnd - localTrimStart)} selected
-          </span>
+          {mode === "trim" ? (
+            <>
+              <FaCut className="scissors-icon" />
+              <span className="trim-time">
+                {formatTime(localTrimEnd - localTrimStart)} selected
+              </span>
+            </>
+          ) : (
+            <>
+              <FaTimes className="scissors-icon" />
+              <span className="trim-time">
+                {clipRanges.length} clips to remove
+                {isSelectingClip &&
+                clipSelectionStart !== null &&
+                hoverPosition !== null
+                  ? ` | Selecting: ${formatTime(
+                      Math.abs(hoverPosition - clipSelectionStart)
+                    )}`
+                  : isSelectingClip
+                  ? " (selecting...)"
+                  : " (click to add)"}
+              </span>
+            </>
+          )}
         </div>
       </div>
 
@@ -310,42 +504,130 @@ const TimelineComponent = ({
           {/* Time markers */}
           {generateTimeMarkers()}
 
-          {/* Trimmed section */}
-          <div
-            className="timeline-selection"
-            style={{
-              left: `${getPositionFromTime(localTrimStart)}%`,
-              width: `${
-                getPositionFromTime(localTrimEnd) -
-                getPositionFromTime(localTrimStart)
-              }%`,
-            }}
-          />
+          {/* Trimmed section - only show in trim mode */}
+          {mode === "trim" && (
+            <div
+              className="timeline-selection"
+              style={{
+                left: `${getPositionFromTime(localTrimStart)}%`,
+                width: `${
+                  getPositionFromTime(localTrimEnd) -
+                  getPositionFromTime(localTrimStart)
+                }%`,
+              }}
+            />
+          )}
 
-          {/* Trim handles */}
-          <div
-            className={`timeline-handle timeline-handle-start ${
-              isDragging === "start" ? "dragging" : ""
-            }`}
-            style={{ left: `${getPositionFromTime(localTrimStart)}%` }}
-            onMouseDown={(e) => handleMouseDown(e, "start")}
-            title="Drag to set start point (or press 'i')"
-          >
-            <div className="handle-line" />
-            <div className="handle-grip" />
-          </div>
+          {/* Clip ranges - only show in clip mode */}
+          {mode === "clip" &&
+            clipRanges.map((clip) => (
+              <div key={clip.id}>
+                {/* Clip range background */}
+                <div
+                  className="timeline-clip-range"
+                  style={{
+                    left: `${getPositionFromTime(clip.start)}%`,
+                    width: `${
+                      getPositionFromTime(clip.end) -
+                      getPositionFromTime(clip.start)
+                    }%`,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Remove clip on click (only if not dragging)
+                    if (!isDragging) {
+                      const updatedRanges = clipRanges.filter(
+                        (r) => r.id !== clip.id
+                      );
+                      onClipRangesChange?.(updatedRanges);
+                    }
+                  }}
+                  title={`Click to remove clip (${formatTime(
+                    clip.start
+                  )} - ${formatTime(clip.end)})`}
+                />
 
-          <div
-            className={`timeline-handle timeline-handle-end ${
-              isDragging === "end" ? "dragging" : ""
-            }`}
-            style={{ left: `${getPositionFromTime(localTrimEnd)}%` }}
-            onMouseDown={(e) => handleMouseDown(e, "end")}
-            title="Drag to set end point (or press 'o')"
-          >
-            <div className="handle-line" />
-            <div className="handle-grip" />
-          </div>
+                {/* Clip start handle */}
+                <div
+                  className={`timeline-handle timeline-clip-handle timeline-clip-handle-start ${
+                    isDragging === "clip-start" && draggedClipId === clip.id
+                      ? "dragging"
+                      : ""
+                  }`}
+                  style={{ left: `${getPositionFromTime(clip.start)}%` }}
+                  onMouseDown={(e) => handleMouseDown(e, "clip-start", clip.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  title={`Drag to adjust clip start: ${formatTime(clip.start)}`}
+                >
+                  <div className="handle-line" />
+                  <div className="handle-grip handle-grip-clip" />
+                </div>
+
+                {/* Clip end handle */}
+                <div
+                  className={`timeline-handle timeline-clip-handle timeline-clip-handle-end ${
+                    isDragging === "clip-end" && draggedClipId === clip.id
+                      ? "dragging"
+                      : ""
+                  }`}
+                  style={{ left: `${getPositionFromTime(clip.end)}%` }}
+                  onMouseDown={(e) => handleMouseDown(e, "clip-end", clip.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  title={`Drag to adjust clip end: ${formatTime(clip.end)}`}
+                >
+                  <div className="handle-line" />
+                  <div className="handle-grip handle-grip-clip" />
+                </div>
+              </div>
+            ))}
+
+          {/* Active clip selection */}
+          {mode === "clip" &&
+            isSelectingClip &&
+            clipSelectionStart !== null &&
+            hoverPosition !== null && (
+              <div
+                className="timeline-clip-selection"
+                style={{
+                  left: `${getPositionFromTime(
+                    Math.min(clipSelectionStart, hoverPosition)
+                  )}%`,
+                  width: `${Math.abs(
+                    getPositionFromTime(hoverPosition) -
+                      getPositionFromTime(clipSelectionStart)
+                  )}%`,
+                }}
+              />
+            )}
+
+          {/* Trim handles - only show in trim mode */}
+          {mode === "trim" && (
+            <>
+              <div
+                className={`timeline-handle timeline-handle-start ${
+                  isDragging === "start" ? "dragging" : ""
+                }`}
+                style={{ left: `${getPositionFromTime(localTrimStart)}%` }}
+                onMouseDown={(e) => handleMouseDown(e, "start")}
+                title="Drag to set start point (or press 'i')"
+              >
+                <div className="handle-line" />
+                <div className="handle-grip" />
+              </div>
+
+              <div
+                className={`timeline-handle timeline-handle-end ${
+                  isDragging === "end" ? "dragging" : ""
+                }`}
+                style={{ left: `${getPositionFromTime(localTrimEnd)}%` }}
+                onMouseDown={(e) => handleMouseDown(e, "end")}
+                title="Drag to set end point (or press 'o')"
+              >
+                <div className="handle-line" />
+                <div className="handle-grip" />
+              </div>
+            </>
+          )}
 
           {/* Playhead */}
           <div
@@ -377,8 +659,18 @@ const TimelineComponent = ({
       <div className="timeline-shortcuts">
         <div className="shortcuts-text">
           <kbd>←→</kbd> Frame by frame • <kbd>Shift+←→</kbd> Second by second •
-          <kbd>Space</kbd> Play/Pause • <kbd>I</kbd> Set In • <kbd>O</kbd> Set
-          Out •<kbd>Home/End</kbd> Go to start/end
+          <kbd>Space</kbd> Play/Pause
+          {mode === "trim" ? (
+            <>
+              • <kbd>I</kbd> Set In • <kbd>O</kbd> Set Out • <kbd>Home/End</kbd>{" "}
+              Go to start/end
+            </>
+          ) : (
+            <>
+              • <kbd>Click & drag</kbd> Select clip range • <kbd>Esc</kbd>{" "}
+              Cancel selection
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -129,6 +129,50 @@
   backdrop-filter: brightness(1.1);
 }
 
+/* Clip Ranges */
+.timeline-clip-range {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: hsl(var(--er) / 0.3);
+  border: 2px solid hsl(var(--er));
+  border-left: none;
+  border-right: none;
+  z-index: 2;
+  cursor: pointer;
+  backdrop-filter: brightness(0.8);
+}
+
+.timeline-clip-range:hover {
+  background: hsl(var(--er) / 0.4);
+  border-color: hsl(var(--er));
+}
+
+/* Active Clip Selection */
+.timeline-clip-selection {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: hsl(var(--er) / 0.15);
+  border: 2px dashed hsl(var(--er));
+  border-left: none;
+  border-right: none;
+  z-index: 2;
+  pointer-events: none;
+  animation: pulse-selection 1s ease-in-out infinite alternate;
+}
+
+@keyframes pulse-selection {
+  0% {
+    background: hsl(var(--er) / 0.1);
+    border-color: hsl(var(--er) / 0.8);
+  }
+  100% {
+    background: hsl(var(--er) / 0.2);
+    border-color: hsl(var(--er));
+  }
+}
+
 /* Timeline Handles */
 .timeline-handle {
   position: absolute;
@@ -139,6 +183,37 @@
   z-index: 4;
   transform: translateX(-50%);
   /* Removed debug background - handles should be visible via grip */
+}
+
+/* Clip Handles - Red color to distinguish from trim handles */
+.timeline-clip-handle {
+  z-index: 6; /* Higher than trim handles */
+  pointer-events: auto; /* Ensure they can be clicked */
+  /* Debug: Add background to see if handles are positioned correctly */
+  background: rgba(255, 0, 0, 0.1);
+}
+
+.timeline-clip-handle .handle-line {
+  width: 2px;
+  height: 100%;
+  background: hsl(var(--er));
+  margin-left: 9px;
+  pointer-events: none; /* Let events pass through to the handle */
+}
+
+.timeline-clip-handle:hover .handle-grip-clip {
+  background: hsl(var(--er));
+  transform: translate(-50%, -50%) scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+/* Disable transitions during dragging for clip handles */
+.timeline-clip-handle.dragging .handle-grip-clip {
+  transition: none;
+}
+
+.timeline-clip-handle:not(.dragging) .handle-grip-clip {
+  transition: all 0.2s ease;
 }
 
 .timeline-handle:hover .handle-grip {
@@ -196,6 +271,46 @@
   height: 12px;
   background: hsl(var(--b1));
   transform: translate(-50%, -50%) translateX(4px);
+  border-radius: 1px;
+}
+
+/* Clip Handle Grips - Red styling */
+.handle-grip-clip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 32px;
+  background: hsl(var(--er));
+  border-radius: 8px;
+  transform: translate(-50%, -50%);
+  transition: background-color 0.1s ease;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  cursor: ew-resize;
+}
+
+.handle-grip-clip::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 12px;
+  background: white;
+  transform: translate(-50%, -50%) translateX(-2px);
+  border-radius: 1px;
+}
+
+.handle-grip-clip::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 12px;
+  background: white;
+  transform: translate(-50%, -50%) translateX(2px);
   border-radius: 1px;
 }
 

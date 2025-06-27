@@ -10,9 +10,22 @@ import {
   FaSave,
   FaDownload,
   FaUndo,
+  FaCut,
+  FaTimes,
+  FaLayerGroup,
 } from "react-icons/fa";
 import Timeline from "./Timeline";
 import VideoPlayer, { VideoPlayerRef } from "./VideoPlayer";
+import SegmentManager, { VideoSegment } from "./SegmentManager";
+
+// Import types from Timeline
+type ClipRange = {
+  id: string;
+  start: number;
+  end: number;
+};
+
+type TimelineMode = "trim" | "clip";
 
 type EditorProps = {
   videoUrl: string;
@@ -31,6 +44,14 @@ const Editor = ({ videoUrl, onBack }: EditorProps) => {
   const [trimEnd, setTrimEnd] = useState(0);
   const [isDurationSet, setIsDurationSet] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Clipping state
+  const [timelineMode, setTimelineMode] = useState<TimelineMode>("trim");
+  const [clipRanges, setClipRanges] = useState<ClipRange[]>([]);
+
+  // Segment management state
+  const [videoSegments, setVideoSegments] = useState<VideoSegment[]>([]);
+  const [showSegmentManager, setShowSegmentManager] = useState(false);
 
   useEffect(() => {
     const loadFfmpeg = async () => {
@@ -117,6 +138,54 @@ const Editor = ({ videoUrl, onBack }: EditorProps) => {
       setIsPlaying(!isPlaying);
     }
   };
+
+  // Calculate video segments from clip ranges
+  const calculateSegments = (clips: ClipRange[]): VideoSegment[] => {
+    const segments: VideoSegment[] = [];
+    let currentStart = 0;
+
+    // Sort clip ranges by start time
+    const sortedClips = [...clips].sort((a, b) => a.start - b.start);
+
+    for (let i = 0; i < sortedClips.length; i++) {
+      const clip = sortedClips[i];
+
+      // Add segment before this clip (if it exists)
+      if (currentStart < clip.start) {
+        segments.push({
+          id: `segment_${segments.length}`,
+          start: currentStart,
+          end: clip.start,
+          order: segments.length,
+        });
+      }
+      currentStart = clip.end;
+    }
+
+    // Add final segment after last clip
+    if (currentStart < duration) {
+      segments.push({
+        id: `segment_${segments.length}`,
+        start: currentStart,
+        end: duration,
+        order: segments.length,
+      });
+    }
+
+    return segments;
+  };
+
+  // Update segments when clip ranges change
+  useEffect(() => {
+    if (clipRanges.length > 0) {
+      const newSegments = calculateSegments(clipRanges);
+      setVideoSegments(newSegments);
+      setShowSegmentManager(true);
+    } else {
+      setVideoSegments([]);
+      setShowSegmentManager(false);
+    }
+  }, [clipRanges, duration]);
 
   const handleTrim = async () => {
     if (!ffmpeg) {
@@ -272,11 +341,199 @@ const Editor = ({ videoUrl, onBack }: EditorProps) => {
     }
   };
 
+  const handleClip = async () => {
+    if (!ffmpeg) {
+      console.error("FFmpeg not loaded yet");
+      return;
+    }
+
+    if (clipRanges.length === 0) {
+      console.error("No clips to remove");
+      return;
+    }
+
+    setIsProcessing(true);
+    setProgress(0);
+
+    try {
+      console.log("Starting clip process...");
+      console.log("Clip ranges to remove:", clipRanges);
+
+      // Use the ordered segments from segment manager
+      const segments = videoSegments
+        .sort((a, b) => a.order - b.order)
+        .map((segment) => ({ start: segment.start, end: segment.end }));
+
+      console.log("Video segments after clipping (ordered):", segments);
+
+      if (segments.length === 0) {
+        throw new Error("All video would be clipped - no segments remaining");
+      }
+
+      // Process segments with FFmpeg
+      const timestamp = Date.now();
+      const inputFileName = `input_${timestamp}.webm`;
+      const outputFileName = `output_${timestamp}.webm`;
+
+      // Clean up existing files
+      try {
+        const files = await ffmpeg.listDir("/");
+        for (const file of files) {
+          if (
+            (file.name.startsWith("input") && file.name.endsWith(".webm")) ||
+            (file.name.startsWith("output") && file.name.endsWith(".webm")) ||
+            (file.name.startsWith("segment") && file.name.endsWith(".webm"))
+          ) {
+            await ffmpeg.deleteFile(file.name);
+            console.log("Cleaned up existing file:", file.name);
+          }
+        }
+      } catch (e) {
+        console.log("Cleanup failed or no files to clean:", e);
+      }
+
+      // Fetch and write input file
+      const response = await fetch(videoUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch video: ${response.statusText}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      await ffmpeg.writeFile(inputFileName, new Uint8Array(arrayBuffer));
+
+      // Create individual segment files
+      const segmentFiles: string[] = [];
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i];
+        const segmentFileName = `segment_${i}_${timestamp}.webm`;
+        segmentFiles.push(segmentFileName);
+
+        const ffmpegArgs = [
+          "-i",
+          inputFileName,
+          "-ss",
+          segment.start.toString(),
+          "-t",
+          (segment.end - segment.start).toString(),
+          "-c",
+          "copy",
+          "-avoid_negative_ts",
+          "make_zero",
+          segmentFileName,
+        ];
+
+        console.log(
+          `Creating segment ${i + 1}/${segments.length}:`,
+          ffmpegArgs.join(" ")
+        );
+        await ffmpeg.exec(ffmpegArgs);
+      }
+
+      // Create concat file
+      const concatContent = segmentFiles
+        .map((file) => `file '${file}'`)
+        .join("\n");
+      await ffmpeg.writeFile(
+        "concat.txt",
+        new TextEncoder().encode(concatContent)
+      );
+
+      // Concatenate all segments
+      const concatArgs = [
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        "concat.txt",
+        "-c",
+        "copy",
+        outputFileName,
+      ];
+
+      console.log("Concatenating segments:", concatArgs.join(" "));
+      await ffmpeg.exec(concatArgs);
+
+      // Read and validate output
+      const data = await ffmpeg.readFile(outputFileName);
+      if (data.length === 0) {
+        throw new Error("Output file is empty");
+      }
+
+      // Create blob and URL
+      const newBlob = new Blob([data], { type: "video/webm" });
+      const newUrl = URL.createObjectURL(newBlob);
+      setEditedVideoUrl(newUrl);
+
+      // Clean up temporary files
+      try {
+        await ffmpeg.deleteFile(inputFileName);
+        await ffmpeg.deleteFile(outputFileName);
+        await ffmpeg.deleteFile("concat.txt");
+        for (const segmentFile of segmentFiles) {
+          await ffmpeg.deleteFile(segmentFile);
+        }
+      } catch (cleanupError) {
+        console.warn("Failed to clean up temporary files:", cleanupError);
+      }
+
+      // Calculate new duration
+      const totalClippedDuration = clipRanges.reduce(
+        (sum, clip) => sum + (clip.end - clip.start),
+        0
+      );
+      const newDuration = duration - totalClippedDuration;
+
+      // Reset states for new video
+      setIsDurationSet(false);
+      setTrimStart(0);
+      setTrimEnd(newDuration);
+      setDuration(newDuration);
+      setCurrentTime(0);
+      setClipRanges([]); // Clear clips after applying
+      setVideoSegments([]); // Clear segments after applying
+      setShowSegmentManager(false);
+
+      console.log("Clip operation completed successfully");
+    } catch (error) {
+      console.error("Error during clipping:", error);
+      alert(`Clipping failed: ${error.message || error}`);
+    } finally {
+      setIsProcessing(false);
+      setProgress(0);
+    }
+  };
+
+  const handlePreviewSegment = (segment: VideoSegment) => {
+    if (videoRef.current) {
+      videoRef.current.setCurrentTime(segment.start);
+      setCurrentTime(segment.start);
+      // Optionally play the segment
+      videoRef.current.play();
+      setIsPlaying(true);
+
+      // Stop playback at segment end using the video element directly
+      const videoElement = videoRef.current.getVideoElement();
+      if (videoElement) {
+        const stopPlayback = () => {
+          if (videoElement.currentTime >= segment.end) {
+            videoElement.pause();
+            setIsPlaying(false);
+            videoElement.removeEventListener("timeupdate", stopPlayback);
+          }
+        };
+
+        videoElement.addEventListener("timeupdate", stopPlayback);
+      }
+    }
+  };
+
   const handleDownload = () => {
     if (editedVideoUrl) {
       const a = document.createElement("a");
       a.href = editedVideoUrl;
-      a.download = `trimmed-video-${Date.now()}.webm`;
+      a.download = `${
+        timelineMode === "trim" ? "trimmed" : "clipped"
+      }-video-${Date.now()}.webm`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -321,6 +578,12 @@ const Editor = ({ videoUrl, onBack }: EditorProps) => {
     // Reset the duration detection flag and trim bounds
     setIsDurationSet(false);
 
+    // Reset clipping state
+    setClipRanges([]);
+    setVideoSegments([]);
+    setShowSegmentManager(false);
+    setTimelineMode("trim");
+
     // Get the current original duration and reset trim bounds
     if (videoRef.current) {
       const originalDuration = videoRef.current.getDuration();
@@ -360,13 +623,61 @@ const Editor = ({ videoUrl, onBack }: EditorProps) => {
           </button>
         </div>
         <div className="flex-none flex gap-2">
+          {/* Mode Toggle */}
+          <div className="btn-group">
+            <button
+              className={`btn btn-sm ${
+                timelineMode === "trim" ? "btn-primary" : "btn-ghost"
+              }`}
+              onClick={() => setTimelineMode("trim")}
+              disabled={isProcessing}
+            >
+              <FaCut className="mr-1" />
+              Trim
+            </button>
+            <button
+              className={`btn btn-sm ${
+                timelineMode === "clip" ? "btn-primary" : "btn-ghost"
+              }`}
+              onClick={() => setTimelineMode("clip")}
+              disabled={isProcessing}
+            >
+              <FaTimes className="mr-1" />
+              Clip
+            </button>
+          </div>
+
+          {/* Segment Manager Toggle - only show when in clip mode and have segments */}
+          {timelineMode === "clip" && videoSegments.length > 0 && (
+            <button
+              className={`btn btn-sm ${
+                showSegmentManager ? "btn-active" : "btn-ghost"
+              }`}
+              onClick={() => setShowSegmentManager(!showSegmentManager)}
+              disabled={isProcessing}
+            >
+              <FaLayerGroup className="mr-1" />
+              {showSegmentManager ? "Hide" : "Show"} Segments
+            </button>
+          )}
+
           <button
             className="btn btn-primary"
-            onClick={handleTrim}
-            disabled={isProcessing || !ffmpeg || trimEnd <= trimStart}
+            onClick={timelineMode === "trim" ? handleTrim : handleClip}
+            disabled={
+              isProcessing ||
+              !ffmpeg ||
+              (timelineMode === "trim"
+                ? trimEnd <= trimStart
+                : clipRanges.length === 0)
+            }
           >
             <FaSave className="mr-2" />
-            {isProcessing ? "Processing..." : "Trim"}
+            {isProcessing
+              ? "Processing..."
+              : timelineMode === "trim"
+              ? "Trim"
+              : "Apply Clips"}
           </button>
           {editedVideoUrl && (
             <>
@@ -443,8 +754,19 @@ const Editor = ({ videoUrl, onBack }: EditorProps) => {
           {/* Debug info */}
           <div className="mb-2 text-sm text-gray-500">
             Duration: {duration > 0 ? `${duration.toFixed(1)}s` : "Loading..."}{" "}
-            | Current: {currentTime.toFixed(1)}s | Selection:{" "}
-            {trimStart.toFixed(1)}s - {trimEnd.toFixed(1)}s
+            | Current: {currentTime.toFixed(1)}s
+            {timelineMode === "trim" ? (
+              <>
+                {" "}
+                | Selection: {trimStart.toFixed(1)}s - {trimEnd.toFixed(1)}s
+              </>
+            ) : (
+              <>
+                {" "}
+                | Clips: {clipRanges.length} ranges to remove
+                {showSegmentManager && ` | Segments: ${videoSegments.length}`}
+              </>
+            )}
           </div>
 
           <Timeline
@@ -466,7 +788,25 @@ const Editor = ({ videoUrl, onBack }: EditorProps) => {
             }}
             isPlaying={isPlaying}
             onPlayPause={handlePlayPause}
+            mode={timelineMode}
+            clipRanges={clipRanges}
+            onClipRangesChange={(ranges) => {
+              console.log("Clip ranges changed:", ranges);
+              setClipRanges(ranges);
+            }}
           />
+
+          {/* Segment Manager - only show in clip mode when there are segments */}
+          {showSegmentManager && timelineMode === "clip" && (
+            <div className="mt-4">
+              <SegmentManager
+                segments={videoSegments}
+                onSegmentsChange={setVideoSegments}
+                duration={duration}
+                onPreviewSegment={handlePreviewSegment}
+              />
+            </div>
+          )}
 
           {/* Manual controls for testing */}
           <div className="mt-2 flex gap-2">
@@ -532,9 +872,27 @@ const Editor = ({ videoUrl, onBack }: EditorProps) => {
             <div className="card-body">
               <h2 className="card-title">Processing Video...</h2>
               <p className="text-sm text-base-content/70 mb-4">
-                Trimming from {formatTime(trimStart)} to {formatTime(trimEnd)}
-                <br />
-                Duration: {formatTime(trimEnd - trimStart)}
+                {timelineMode === "trim" ? (
+                  <>
+                    Trimming from {formatTime(trimStart)} to{" "}
+                    {formatTime(trimEnd)}
+                    <br />
+                    Duration: {formatTime(trimEnd - trimStart)}
+                  </>
+                ) : (
+                  <>
+                    Removing {clipRanges.length} clip
+                    {clipRanges.length !== 1 ? "s" : ""}
+                    <br />
+                    Total removed:{" "}
+                    {formatTime(
+                      clipRanges.reduce(
+                        (sum, clip) => sum + (clip.end - clip.start),
+                        0
+                      )
+                    )}
+                  </>
+                )}
               </p>
               <progress
                 className="progress progress-primary w-full"
