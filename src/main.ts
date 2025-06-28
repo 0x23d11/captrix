@@ -6,6 +6,7 @@ import {
   dialog,
   screen,
   globalShortcut,
+  session,
 } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
@@ -323,14 +324,74 @@ const createWindow = () => {
     );
   }
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  // Open the DevTools only in development
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools();
+  }
+};
+
+// Set up media permissions handler
+const setupMediaPermissions = () => {
+  try {
+    // Handle permission requests for media devices
+    session.defaultSession.setPermissionRequestHandler(
+      (webContents, permission, callback) => {
+        console.log(`Permission request for: ${permission}`);
+
+        // Always allow media permissions for our app
+        if (permission === "media") {
+          console.log(`Granting ${permission} permission`);
+          callback(true);
+          return;
+        }
+
+        // For other permissions, use default behavior
+        callback(false);
+      }
+    );
+
+    // Handle permission check requests
+    session.defaultSession.setPermissionCheckHandler(
+      (webContents, permission, requestingOrigin, details) => {
+        console.log(
+          `Permission check for: ${permission} from ${requestingOrigin}`
+        );
+
+        // Always allow media permissions for our app
+        if (permission === "media") {
+          console.log(`Permission check: allowing ${permission}`);
+          return true;
+        }
+
+        return false;
+      }
+    );
+
+    // Set device permission handler for better control
+    session.defaultSession.setDevicePermissionHandler((details) => {
+      console.log("Device permission request:", details);
+
+      // Allow all device permissions for our app - this helps with USB devices and other hardware
+      return true;
+    });
+
+    console.log("Media permissions setup completed successfully");
+  } catch (error) {
+    console.warn(
+      "Failed to setup media permissions (this may be normal for unsigned apps):",
+      error
+    );
+    // Don't throw - the app should still work for basic functionality
+  }
 };
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on("ready", () => {
+  // Set up media permissions before creating window
+  setupMediaPermissions();
+
   createWindow();
 
   globalShortcut.register("CommandOrControl+Shift+R", () => {

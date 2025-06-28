@@ -17,6 +17,14 @@ const config: ForgeConfig = {
       // Don't include source files in the package
       /\/src($|\/)/,
     ],
+    // Add macOS specific configuration for media permissions (only for production builds)
+    ...(process.env.NODE_ENV === "production" &&
+      process.env.APPLE_ID && {
+        osxSign: {
+          entitlements: "entitlements.mac.plist",
+          entitlementsInherit: "entitlements.mac.plist",
+        } as any,
+      }),
   },
   rebuildConfig: {
     // Skip rebuilding uiohook-napi in CI - use prebuilt binaries
@@ -26,7 +34,13 @@ const config: ForgeConfig = {
   },
   makers: [
     new MakerSquirrel({}),
-    new MakerZIP({}, ["darwin"]),
+    new MakerZIP(
+      {
+        macUpdateManifestBaseUrl:
+          "https://github.com/Hexploration-Inc/captrix/releases/latest/download/",
+      },
+      ["darwin"]
+    ),
     new MakerRpm({}),
     new MakerDeb({}),
   ],
@@ -69,11 +83,11 @@ const config: ForgeConfig = {
     new FusesPlugin({
       version: FuseVersion.V1,
       [FuseV1Options.RunAsNode]: false,
-      [FuseV1Options.EnableCookieEncryption]: true,
+      [FuseV1Options.EnableCookieEncryption]: false, // Simplified for local development
       [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
       [FuseV1Options.EnableNodeCliInspectArguments]: false,
-      [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
-      [FuseV1Options.OnlyLoadAppFromAsar]: true,
+      [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: false, // Simplified for local development
+      [FuseV1Options.OnlyLoadAppFromAsar]: false, // Allow loading from outside ASAR for development
     }),
   ],
 };
