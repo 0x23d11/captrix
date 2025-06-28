@@ -5,13 +5,23 @@ on:
     tags:
       - "v*.*.*" # Triggers on version tags like v1.0.1, v1.2.0, etc.
 
+permissions:
+  contents: write # Required to create releases and upload assets
+
 jobs:
   release:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        include:
+          - os: macos-latest
+            platform: mac
+          - os: windows-latest
+            platform: win
+          - os: ubuntu-latest
+            platform: linux
 
     steps:
       - name: Checkout code
@@ -26,20 +36,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and publish (macOS)
-        if: matrix.os == 'macos-latest'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run publish
-
-      - name: Build and publish (Windows)
-        if: matrix.os == 'windows-latest'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run publish
-
-      - name: Build and publish (Linux)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Publish Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run publish
