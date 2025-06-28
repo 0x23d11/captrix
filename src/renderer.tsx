@@ -4,6 +4,7 @@ import "./index.css";
 import Editor from "./Editor";
 import Settings, { AppSettings, loadSettings } from "./Settings";
 import Help from "./Help";
+import UpdateNotification from "./UpdateNotification";
 import {
   FaDesktop,
   FaWindowMaximize,
@@ -108,6 +109,9 @@ const App = () => {
   if (!sourceType) {
     return (
       <div className="flex flex-col items-center justify-center h-screen relative overflow-hidden">
+        {/* Update Notification */}
+        <UpdateNotification />
+
         {/* Top Right Buttons */}
         <div className="absolute top-6 right-6 flex space-x-2 z-20">
           <button

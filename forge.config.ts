@@ -7,6 +7,7 @@ import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
 import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-natives";
+import { PublisherGithub } from "@electron-forge/publisher-github";
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -18,6 +19,16 @@ const config: ForgeConfig = {
     new MakerZIP({}, ["darwin"]),
     new MakerRpm({}),
     new MakerDeb({}),
+  ],
+  publishers: [
+    new PublisherGithub({
+      repository: {
+        owner: "Hexploration-Inc",
+        name: "captrix",
+      },
+      prerelease: false,
+      draft: true, // Create as draft first for testing
+    }),
   ],
   plugins: [
     new AutoUnpackNativesPlugin({}),
