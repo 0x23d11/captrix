@@ -277,6 +277,9 @@ const Recorder = ({
     animationDuration: 600,
     smoothing: 0.05,
     inactivityTimeout: 2000,
+    videoQuality: "high" as "low" | "medium" | "high" | "ultra",
+    videoBitrate: 8000000, // 8 Mbps
+    audioBitrate: 320000, // 320 kbps
   });
   const [isZoomedIn, setIsZoomedIn] = useState(false);
   const cursorPositionRef = React.useRef({ x: 0, y: 0 });
@@ -291,8 +294,29 @@ const Recorder = ({
   });
 
   const inactivityTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const keyboardActivityTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   const isZoomedInRef = React.useRef(isZoomedIn);
   isZoomedInRef.current = isZoomedIn;
+
+  // Function to update bitrates based on quality preset
+  const updateQualitySettings = (
+    quality: "low" | "medium" | "high" | "ultra"
+  ) => {
+    const qualityPresets = {
+      low: { videoBitrate: 1000000, audioBitrate: 64000 }, // 1 Mbps, 64 kbps
+      medium: { videoBitrate: 3000000, audioBitrate: 128000 }, // 3 Mbps, 128 kbps
+      high: { videoBitrate: 8000000, audioBitrate: 320000 }, // 8 Mbps, 320 kbps
+      ultra: { videoBitrate: 20000000, audioBitrate: 320000 }, // 20 Mbps, 320 kbps
+    };
+
+    const preset = qualityPresets[quality];
+    setSettings((s) => ({
+      ...s,
+      videoQuality: quality,
+      videoBitrate: preset.videoBitrate,
+      audioBitrate: preset.audioBitrate,
+    }));
+  };
 
   const getVideoStream = async () => {
     if (videoStreamRef.current) {
@@ -414,8 +438,16 @@ const Recorder = ({
     };
 
     const handleKeyboardActivity = () => {
-      // On keyboard activity, zoom to the cursor's last known position.
-      handleMouseAction(cursorPositionRef.current);
+      // Clear existing timer
+      if (keyboardActivityTimerRef.current) {
+        clearTimeout(keyboardActivityTimerRef.current);
+      }
+
+      // Set a small delay to only trigger zoom after sustained activity
+      keyboardActivityTimerRef.current = setTimeout(() => {
+        // On sustained keyboard activity, zoom to the cursor's last known position.
+        handleMouseAction(cursorPositionRef.current);
+      }, 200); // 200ms delay to filter out single key presses
     };
 
     window.electronAPI.startMouseEventTracking();
@@ -432,6 +464,9 @@ const Recorder = ({
       unsubscribeKeyboard();
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
+      }
+      if (keyboardActivityTimerRef.current) {
+        clearTimeout(keyboardActivityTimerRef.current);
       }
     };
   }, [autoZoomPan, recordingState, displays, source.id]);
@@ -718,6 +753,8 @@ const Recorder = ({
 
     mediaRecorder.current = new MediaRecorder(combinedStream, {
       mimeType: "video/webm; codecs=vp9,opus",
+      videoBitsPerSecond: settings.videoBitrate,
+      audioBitsPerSecond: settings.audioBitrate,
     });
 
     mediaRecorder.current.ondataavailable = (event) => {
@@ -986,6 +1023,42 @@ const Recorder = ({
                             </option>
                           ))}
                         </select>
+                      </div>
+
+                      <div className="form-control-modern">
+                        <label className="label">
+                          <span className="label-text">Recording Quality</span>
+                        </label>
+                        <select
+                          className="select select-bordered w-full focus-modern"
+                          value={settings.videoQuality}
+                          onChange={(e) =>
+                            updateQualitySettings(
+                              e.target.value as
+                                | "low"
+                                | "medium"
+                                | "high"
+                                | "ultra"
+                            )
+                          }
+                        >
+                          <option value="low">
+                            🔸 Low (1 Mbps) - Small files
+                          </option>
+                          <option value="medium">
+                            🔹 Medium (3 Mbps) - Balanced
+                          </option>
+                          <option value="high">
+                            ⭐ High (8 Mbps) - Recommended
+                          </option>
+                          <option value="ultra">
+                            💎 Ultra (20 Mbps) - Best quality
+                          </option>
+                        </select>
+                        <div className="text-xs text-base-content/60 mt-1">
+                          Higher quality = larger file sizes. Ultra quality
+                          recommended for professional use.
+                        </div>
                       </div>
                     </div>
 
