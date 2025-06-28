@@ -15,7 +15,7 @@ export interface RecordingSettings {
 }
 
 export interface UISettings {
-  theme: "light" | "dark" | "system";
+  theme: "corporate" | "dark" | "system";
   timelineMode: "trim" | "clip";
 }
 
@@ -38,17 +38,19 @@ const defaultSettings: AppSettings = {
 };
 
 // Theme management utilities
-const applyTheme = (theme: "light" | "dark" | "system") => {
+const applyTheme = (theme: "corporate" | "dark" | "system") => {
   const html = document.documentElement;
 
   if (theme === "system") {
     const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    html.setAttribute("data-theme", isDark ? "dracula" : "winter");
+    html.setAttribute("data-theme", isDark ? "dark" : "corporate");
   } else if (theme === "dark") {
-    html.setAttribute("data-theme", "dracula");
+    html.setAttribute("data-theme", "dark");
   } else {
-    html.setAttribute("data-theme", "winter");
+    html.setAttribute("data-theme", "corporate");
   }
+
+  console.log(`Applied theme: ${html.getAttribute("data-theme")}`);
 };
 
 // Settings storage utilities
@@ -237,7 +239,7 @@ const Settings = ({ onBack, onSettingsChange }: SettingsProps) => {
             updateSettings("ui", { theme: e.target.value as any })
           }
         >
-          <option value="light">Light Theme</option>
+          <option value="corporate">Corporate Theme</option>
           <option value="dark">Dark Theme</option>
           <option value="system">Follow System Theme</option>
         </select>
@@ -284,10 +286,24 @@ const Settings = ({ onBack, onSettingsChange }: SettingsProps) => {
     }
   };
 
-  // Apply theme on component mount to fix theme switching
+  // Apply theme on component mount and listen for system theme changes
   useEffect(() => {
     applyTheme(settings.ui.theme);
-  }, []);
+
+    // Listen for system theme changes when using system theme
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleSystemThemeChange = () => {
+      if (settings.ui.theme === "system") {
+        applyTheme("system");
+      }
+    };
+
+    mediaQuery.addEventListener("change", handleSystemThemeChange);
+
+    return () => {
+      mediaQuery.removeEventListener("change", handleSystemThemeChange);
+    };
+  }, [settings.ui.theme]);
 
   return (
     <div className="min-h-screen bg-base-100">

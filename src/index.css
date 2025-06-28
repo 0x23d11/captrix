@@ -1,7 +1,9 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
 
 @import "tailwindcss";
-@plugin "daisyui";
+@plugin "daisyui" {
+  themes: corporate --default, dark --prefersdark;
+}
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system,
@@ -55,12 +57,20 @@
 
 body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
   min-height: 100vh;
 }
 
+/* Theme-specific backgrounds */
+[data-theme="dark"] body {
+  background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+}
+
+[data-theme="corporate"] body {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
+}
+
 /* Enhanced Glass Components */
-.glass {
+[data-theme="dark"] .glass {
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -68,8 +78,22 @@ body {
   box-shadow: var(--glass-shadow);
 }
 
-.glass-hover:hover {
+[data-theme="corporate"] .glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .glass-hover:hover {
   background: var(--glass-bg-hover);
+  transform: translateY(-2px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="corporate"] .glass-hover:hover {
+  background: rgba(255, 255, 255, 0.9);
   transform: translateY(-2px);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -139,9 +163,18 @@ body {
 }
 
 /* Enhanced Typography */
-.text-hero {
+[data-theme="dark"] .text-hero {
   @apply text-4xl md:text-5xl lg:text-6xl font-bold;
   background: linear-gradient(135deg, #fff 0%, #a855f7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+}
+
+[data-theme="corporate"] .text-hero {
+  @apply text-4xl md:text-5xl lg:text-6xl font-bold;
+  background: linear-gradient(135deg, #1e293b 0%, #7c3aed 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

@@ -31,10 +31,30 @@ const App = () => {
   );
   const [showSettings, setShowSettings] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
-    // Load settings and apply theme immediately
+    // Load settings - theme is already applied in loadSettings()
     const settings = loadSettings();
     return settings;
   });
+
+  // Apply theme when settings change
+  useEffect(() => {
+    const applyTheme = (theme: "corporate" | "dark" | "system") => {
+      const html = document.documentElement;
+
+      if (theme === "system") {
+        const isDark = window.matchMedia(
+          "(prefers-color-scheme: dark)"
+        ).matches;
+        html.setAttribute("data-theme", isDark ? "dark" : "corporate");
+      } else if (theme === "dark") {
+        html.setAttribute("data-theme", "dark");
+      } else {
+        html.setAttribute("data-theme", "corporate");
+      }
+    };
+
+    applyTheme(appSettings.ui.theme);
+  }, [appSettings.ui.theme]);
 
   useEffect(() => {
     window.electronAPI.getSources().then(setAllSources);
