@@ -12,6 +12,8 @@ import fs from "node:fs/promises";
 import started from "electron-squirrel-startup";
 import { uIOhook } from "uiohook-napi";
 import { autoUpdater } from "electron-updater";
+import * as os from "os";
+import { exec } from "child_process";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -141,10 +143,22 @@ const isRegularKey = (keycode: number): boolean => {
 };
 
 ipcMain.on("start-mouse-event-tracking", () => {
-  uIOhook.on("mousedown", sendMouseClick);
-  uIOhook.on("mousemove", sendMouseMove);
-  uIOhook.on("keydown", sendKeydown);
-  uIOhook.start();
+  try {
+    uIOhook.on("mousedown", sendMouseClick);
+    uIOhook.on("mousemove", sendMouseMove);
+    uIOhook.on("keydown", sendKeydown);
+    uIOhook.start();
+    console.log("Mouse tracking started successfully");
+  } catch (error) {
+    console.error("Failed to start mouse tracking:", error);
+    console.log(
+      "Note: On macOS, you may need to grant Accessibility permissions to this app in System Preferences > Privacy & Security > Accessibility"
+    );
+    // Send error to renderer so it can show a user-friendly message
+    if (mainWindow) {
+      mainWindow.webContents.send("mouse-tracking-error", error.message);
+    }
+  }
 });
 
 ipcMain.on("stop-mouse-event-tracking", () => {
@@ -195,6 +209,91 @@ ipcMain.handle("download-update", async () => {
 
 ipcMain.handle("quit-and-install", () => {
   autoUpdater.quitAndInstall();
+});
+
+// Permission checking function
+const checkMouseTrackingPermissions = (): Promise<{
+  hasPermission: boolean;
+  needsPermission: boolean;
+  platform: string;
+}> => {
+  return new Promise((resolve) => {
+    const platform = os.platform();
+
+    if (platform === "darwin") {
+      // macOS requires Accessibility permissions
+      try {
+        // Test if we can start uIOhook without crashing
+        const testHook = () => {
+          try {
+            uIOhook.start();
+            uIOhook.stop();
+            resolve({
+              hasPermission: true,
+              needsPermission: true,
+              platform: "macOS",
+            });
+          } catch (error) {
+            console.log("macOS Accessibility permission needed:", error);
+            resolve({
+              hasPermission: false,
+              needsPermission: true,
+              platform: "macOS",
+            });
+          }
+        };
+
+        // Use a timeout to catch hanging
+        const timeout = setTimeout(() => {
+          resolve({
+            hasPermission: false,
+            needsPermission: true,
+            platform: "macOS",
+          });
+        }, 2000);
+
+        testHook();
+        clearTimeout(timeout);
+      } catch (error) {
+        resolve({
+          hasPermission: false,
+          needsPermission: true,
+          platform: "macOS",
+        });
+      }
+    } else if (platform === "win32") {
+      // Windows typically doesn't need special permissions for uIOhook
+      resolve({
+        hasPermission: true,
+        needsPermission: false,
+        platform: "Windows",
+      });
+    } else {
+      // Linux - may need permissions in some cases
+      resolve({
+        hasPermission: true,
+        needsPermission: true,
+        platform: "Linux",
+      });
+    }
+  });
+};
+
+ipcMain.handle("check-mouse-tracking-permissions", async () => {
+  return await checkMouseTrackingPermissions();
+});
+
+ipcMain.handle("open-system-preferences", () => {
+  const platform = os.platform();
+  if (platform === "darwin") {
+    // Open macOS System Preferences to Accessibility
+    exec(
+      'open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"'
+    );
+  } else if (platform === "win32") {
+    // Windows doesn't typically need this, but we could open relevant settings
+    exec("start ms-settings:privacy-general");
+  }
 });
 
 ipcMain.handle("get-app-version", () => {

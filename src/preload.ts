@@ -98,4 +98,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener("updater-update-downloaded", listener);
     };
   },
+  onMouseTrackingError: (callback: (error: string) => void) => {
+    const listener = (_event: unknown, error: string) => callback(error);
+    ipcRenderer.on("mouse-tracking-error", listener);
+    return () => {
+      ipcRenderer.removeListener("mouse-tracking-error", listener);
+    };
+  },
+  checkMouseTrackingPermissions: () =>
+    ipcRenderer.invoke("check-mouse-tracking-permissions"),
+  openSystemPreferences: () => ipcRenderer.invoke("open-system-preferences"),
 });

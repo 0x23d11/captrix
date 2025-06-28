@@ -34,6 +34,12 @@ const App = () => {
   );
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [permissionStatus, setPermissionStatus] = useState<{
+    hasPermission: boolean;
+    needsPermission: boolean;
+    platform: string;
+  } | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
     // Load settings - theme is already applied in loadSettings()
     const settings = loadSettings();
@@ -64,6 +70,28 @@ const App = () => {
     window.electronAPI.getSources().then(setAllSources);
   }, []);
 
+  // Check permissions on startup
+  useEffect(() => {
+    const checkPermissions = async () => {
+      const api = window.electronAPI as any;
+      if (api.checkMouseTrackingPermissions) {
+        try {
+          const status = await api.checkMouseTrackingPermissions();
+          setPermissionStatus(status);
+
+          // Show modal if permissions are needed but not granted
+          if (status.needsPermission && !status.hasPermission) {
+            setShowPermissionModal(true);
+          }
+        } catch (error) {
+          console.error("Failed to check permissions:", error);
+        }
+      }
+    };
+
+    checkPermissions();
+  }, []);
+
   useEffect(() => {
     if (sourceType) {
       const filtered = allSources.filter((source) =>
@@ -83,26 +111,137 @@ const App = () => {
     setAppSettings(newSettings);
   };
 
+  // Permission Modal Component
+  const PermissionModal = () => {
+    if (!showPermissionModal || !permissionStatus) return null;
+
+    const handleOpenSettings = async () => {
+      const api = window.electronAPI as any;
+      if (api.openSystemPreferences) {
+        await api.openSystemPreferences();
+      }
+    };
+
+    const handleRecheck = async () => {
+      const api = window.electronAPI as any;
+      if (api.checkMouseTrackingPermissions) {
+        try {
+          const status = await api.checkMouseTrackingPermissions();
+          setPermissionStatus(status);
+
+          if (status.hasPermission) {
+            setShowPermissionModal(false);
+          }
+        } catch (error) {
+          console.error("Failed to recheck permissions:", error);
+        }
+      }
+    };
+
+    const handleSkip = () => {
+      setShowPermissionModal(false);
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-base-100 rounded-2xl shadow-2xl max-w-md w-full p-6">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-warning/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FaCog className="text-2xl text-warning" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Permissions Required</h2>
+            <p className="text-base-content/70">
+              Captrix needs permission to access mouse and keyboard events for
+              the auto-zoom feature.
+            </p>
+          </div>
+
+          <div className="bg-base-200/50 rounded-lg p-4 mb-6">
+            <h3 className="font-semibold mb-2">
+              📱 {permissionStatus.platform} Instructions:
+            </h3>
+            {permissionStatus.platform === "macOS" ? (
+              <div className="text-sm space-y-2">
+                <p>1. Click "Open Settings" below</p>
+                <p>
+                  2. Go to <strong>Privacy & Security → Accessibility</strong>
+                </p>
+                <p>
+                  3. Add <strong>Captrix</strong> to the allowed apps
+                </p>
+                <p>4. Come back and click "Recheck"</p>
+              </div>
+            ) : permissionStatus.platform === "Windows" ? (
+              <div className="text-sm">
+                <p>Windows permissions are usually granted automatically.</p>
+              </div>
+            ) : (
+              <div className="text-sm">
+                <p>
+                  Linux permissions may vary by distribution. The app will try
+                  to work without special permissions.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {permissionStatus.platform === "macOS" && (
+              <button
+                className="btn btn-primary btn-modern"
+                onClick={handleOpenSettings}
+              >
+                <FaCog className="mr-2" /> Open System Preferences
+              </button>
+            )}
+
+            <button
+              className="btn btn-secondary btn-modern"
+              onClick={handleRecheck}
+            >
+              🔄 Recheck Permissions
+            </button>
+
+            <button className="btn btn-ghost btn-modern" onClick={handleSkip}>
+              Skip (Auto-zoom will be disabled)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (showSettings) {
     return (
-      <Settings
-        onBack={() => setShowSettings(false)}
-        onSettingsChange={handleSettingsChange}
-      />
+      <>
+        <Settings
+          onBack={() => setShowSettings(false)}
+          onSettingsChange={handleSettingsChange}
+        />
+        <PermissionModal />
+      </>
     );
   }
 
   if (showHelp) {
-    return <Help onBack={() => setShowHelp(false)} />;
+    return (
+      <>
+        <Help onBack={() => setShowHelp(false)} />
+        <PermissionModal />
+      </>
+    );
   }
 
   if (selectedSource) {
     return (
-      <Recorder
-        source={selectedSource}
-        clearSource={() => setSelectedSource(null)}
-        settings={appSettings}
-      />
+      <>
+        <Recorder
+          source={selectedSource}
+          clearSource={() => setSelectedSource(null)}
+          settings={appSettings}
+        />
+        <PermissionModal />
+      </>
     );
   }
 
@@ -208,6 +347,7 @@ const App = () => {
             </div>
           </div>
         </div>
+        <PermissionModal />
       </div>
     );
   }
@@ -317,6 +457,7 @@ const App = () => {
           )}
         </div>
       </div>
+      <PermissionModal />
     </div>
   );
 };
@@ -353,6 +494,9 @@ const Recorder = ({
   const [selectedWebcamId, setSelectedWebcamId] = useState<string | null>(null);
   const [autoZoomPan, setAutoZoomPan] = useState(
     globalSettings.recording.autoZoomEnabled
+  );
+  const [mouseTrackingError, setMouseTrackingError] = useState<string | null>(
+    null
   );
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState({
@@ -497,6 +641,7 @@ const Recorder = ({
   useEffect(() => {
     if (
       !autoZoomPan ||
+      mouseTrackingError ||
       (recordingState !== "recording" && recordingState !== "paused")
     ) {
       return;
@@ -581,7 +726,25 @@ const Recorder = ({
         clearTimeout(keyboardActivityTimerRef.current);
       }
     };
-  }, [autoZoomPan, recordingState, displays, source.id]);
+  }, [autoZoomPan, recordingState, displays, source.id, mouseTrackingError]);
+
+  // Handle mouse tracking errors
+  useEffect(() => {
+    const api = window.electronAPI as any;
+    const unsubscribe = api.onMouseTrackingError
+      ? api.onMouseTrackingError((error: string) => {
+          console.warn("Mouse tracking disabled due to permissions:", error);
+          setMouseTrackingError(error);
+          setAutoZoomPan(false);
+        })
+      : () => {
+          /* no-op */
+        };
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (videoStreamRef.current && source) {
@@ -1194,13 +1357,26 @@ const Recorder = ({
                             {!source.id.startsWith("screen") &&
                               " (Screen sources only)"}
                           </div>
+                          {mouseTrackingError && (
+                            <div className="alert alert-warning mt-2 p-2 text-xs">
+                              <div>
+                                <strong>Permission Required:</strong> Auto-zoom
+                                needs Accessibility permissions. Go to System
+                                Preferences → Privacy & Security → Accessibility
+                                and add Captrix.
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <input
                           type="checkbox"
                           className="toggle toggle-primary toggle-modern"
                           checked={autoZoomPan}
                           onChange={(e) => setAutoZoomPan(e.target.checked)}
-                          disabled={!source.id.startsWith("screen")}
+                          disabled={
+                            !source.id.startsWith("screen") ||
+                            !!mouseTrackingError
+                          }
                         />
                       </label>
                     </div>
