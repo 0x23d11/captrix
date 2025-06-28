@@ -31,11 +31,55 @@ const sendMouseMove = (event: { x: number; y: number }) => {
   }
 };
 
-const sendKeydown = () => {
-  console.log("Keyboard activity detected in main process.");
+const sendKeydown = (event: any) => {
+  // Filter out key combinations that shouldn't trigger zoom
+  const { ctrlKey, metaKey, altKey, shiftKey, keycode } = event;
+
+  // Ignore global shortcuts and system-level key combinations
+  const isModifierCombo = ctrlKey || metaKey || altKey;
+  const isGlobalShortcut =
+    (ctrlKey || metaKey) && shiftKey && (keycode === 82 || keycode === 80); // R or P
+  const isFunctionKey = keycode >= 112 && keycode <= 123; // F1-F12
+  const isSystemKey = keycode === 91 || keycode === 92 || keycode === 93; // Windows/Cmd keys
+
+  // Only trigger zoom for regular typing and navigation keys
+  if (
+    isGlobalShortcut ||
+    isFunctionKey ||
+    isSystemKey ||
+    (isModifierCombo && !isRegularKey(keycode))
+  ) {
+    console.log("Ignoring system/shortcut key for zoom:", keycode, {
+      ctrlKey,
+      metaKey,
+      altKey,
+      shiftKey,
+    });
+    return;
+  }
+
+  console.log("Keyboard activity detected for zoom:", keycode);
   if (mainWindow) {
     mainWindow.webContents.send("keyboard-activity");
   }
+};
+
+// Helper function to determine if a key with modifiers is still a "regular" typing key
+const isRegularKey = (keycode: number): boolean => {
+  // Letters (A-Z)
+  if (keycode >= 65 && keycode <= 90) return true;
+  // Numbers (0-9)
+  if (keycode >= 48 && keycode <= 57) return true;
+  // Numpad numbers
+  if (keycode >= 96 && keycode <= 105) return true;
+  // Space, Enter, Backspace, Delete, Tab
+  if ([32, 13, 8, 46, 9].includes(keycode)) return true;
+  // Arrow keys
+  if (keycode >= 37 && keycode <= 40) return true;
+  // Home, End, Page Up, Page Down
+  if ([35, 36, 33, 34].includes(keycode)) return true;
+
+  return false;
 };
 
 ipcMain.on("start-mouse-event-tracking", () => {

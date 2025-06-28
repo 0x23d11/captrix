@@ -294,6 +294,7 @@ const Recorder = ({
   });
 
   const inactivityTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const keyboardActivityTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   const isZoomedInRef = React.useRef(isZoomedIn);
   isZoomedInRef.current = isZoomedIn;
 
@@ -437,8 +438,16 @@ const Recorder = ({
     };
 
     const handleKeyboardActivity = () => {
-      // On keyboard activity, zoom to the cursor's last known position.
-      handleMouseAction(cursorPositionRef.current);
+      // Clear existing timer
+      if (keyboardActivityTimerRef.current) {
+        clearTimeout(keyboardActivityTimerRef.current);
+      }
+
+      // Set a small delay to only trigger zoom after sustained activity
+      keyboardActivityTimerRef.current = setTimeout(() => {
+        // On sustained keyboard activity, zoom to the cursor's last known position.
+        handleMouseAction(cursorPositionRef.current);
+      }, 200); // 200ms delay to filter out single key presses
     };
 
     window.electronAPI.startMouseEventTracking();
@@ -455,6 +464,9 @@ const Recorder = ({
       unsubscribeKeyboard();
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
+      }
+      if (keyboardActivityTimerRef.current) {
+        clearTimeout(keyboardActivityTimerRef.current);
       }
     };
   }, [autoZoomPan, recordingState, displays, source.id]);
