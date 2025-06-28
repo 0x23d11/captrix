@@ -11,7 +11,9 @@ import { PublisherGithub } from "@electron-forge/publisher-github";
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpack: "**/node_modules/uiohook-napi/**/*",
+    },
   },
   rebuildConfig: {},
   makers: [
