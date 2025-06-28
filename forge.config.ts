@@ -6,7 +6,6 @@ import { MakerRpm } from "@electron-forge/maker-rpm";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
-import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-natives";
 import { PublisherGithub } from "@electron-forge/publisher-github";
 
 const config: ForgeConfig = {
@@ -19,7 +18,12 @@ const config: ForgeConfig = {
       /\/src($|\/)/,
     ],
   },
-  rebuildConfig: {},
+  rebuildConfig: {
+    // Skip rebuilding uiohook-napi in CI - use prebuilt binaries
+    ...(process.env.CI && {
+      onlyModules: [], // Don't rebuild any modules in CI
+    }),
+  },
   makers: [
     new MakerSquirrel({}),
     new MakerZIP({}, ["darwin"]),
@@ -37,7 +41,6 @@ const config: ForgeConfig = {
     }),
   ],
   plugins: [
-    new AutoUnpackNativesPlugin({}),
     new VitePlugin({
       // `build` can specify multiple entry builds, which can be Main process, Preload scripts, Worker process, etc.
       // If you are familiar with Vite configuration, it will look really familiar.
