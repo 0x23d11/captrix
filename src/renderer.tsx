@@ -498,6 +498,9 @@ const Recorder = ({
   const [mouseTrackingError, setMouseTrackingError] = useState<string | null>(
     null
   );
+  const [mediaPermissionStatus, setMediaPermissionStatus] = useState<
+    "unknown" | "granted" | "denied"
+  >("unknown");
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState({
     zoomFactor: 2,
@@ -604,19 +607,32 @@ const Recorder = ({
   useEffect(() => {
     const getMediaSources = async () => {
       try {
-        // Request dummy stream to get permissions
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: true,
-        });
+        // First, get available devices without permission (limited labels)
+        let devices = await navigator.mediaDevices.enumerateDevices();
 
-        const devices = await navigator.mediaDevices.enumerateDevices();
+        // Check if we have permission by seeing if device labels are available
+        const hasPermission = devices.some((device) => device.label !== "");
+
+        if (!hasPermission) {
+          // Request permission by asking for a dummy stream
+          console.log("Requesting media permissions...");
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: true,
+          });
+
+          // Now get devices again with proper labels
+          devices = await navigator.mediaDevices.enumerateDevices();
+
+          // Stop dummy stream immediately
+          stream.getTracks().forEach((track) => track.stop());
+        }
 
         const audioInputDevices = devices.filter(
           (device) => device.kind === "audioinput"
         );
         setAudioSources(audioInputDevices);
-        if (audioInputDevices.length > 0) {
+        if (audioInputDevices.length > 0 && !selectedAudioSourceId) {
           setSelectedAudioSourceId(audioInputDevices[0].deviceId);
         }
 
@@ -625,18 +641,84 @@ const Recorder = ({
         );
         setWebcamSources(videoInputDevices);
 
-        // Stop dummy stream
-        stream.getTracks().forEach((track) => track.stop());
+        console.log(
+          `Found ${audioInputDevices.length} audio sources and ${videoInputDevices.length} video sources`
+        );
+        setMediaPermissionStatus("granted");
       } catch (error) {
-        console.error("Could not get media devices or permissions.", error);
-        setAudioSources([]);
-        setWebcamSources([]);
+        console.error("Could not get media devices or permissions:", error);
+
+        // Still try to get basic device list without labels
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const audioDevices = devices.filter((d) => d.kind === "audioinput");
+          const videoDevices = devices.filter((d) => d.kind === "videoinput");
+
+          setAudioSources(
+            audioDevices.map((device, index) => ({
+              ...device,
+              label: device.label || `Microphone ${index + 1}`,
+            }))
+          );
+
+          setWebcamSources(
+            videoDevices.map((device, index) => ({
+              ...device,
+              label: device.label || `Camera ${index + 1}`,
+            }))
+          );
+
+          console.log("Media permissions denied, using generic device names");
+          setMediaPermissionStatus("denied");
+        } catch (fallbackError) {
+          console.error(
+            "Could not access media devices at all:",
+            fallbackError
+          );
+          setAudioSources([]);
+          setWebcamSources([]);
+          setMediaPermissionStatus("denied");
+        }
       }
     };
 
     getMediaSources();
     window.electronAPI.getDisplays().then(setDisplays);
   }, []);
+
+  const requestMediaPermissions = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: true,
+      });
+
+      // Stop the stream immediately
+      stream.getTracks().forEach((track) => track.stop());
+
+      // Refresh the device list
+      const devices = await navigator.mediaDevices.enumerateDevices();
+
+      const audioInputDevices = devices.filter(
+        (device) => device.kind === "audioinput"
+      );
+      setAudioSources(audioInputDevices);
+      if (audioInputDevices.length > 0 && !selectedAudioSourceId) {
+        setSelectedAudioSourceId(audioInputDevices[0].deviceId);
+      }
+
+      const videoInputDevices = devices.filter(
+        (device) => device.kind === "videoinput"
+      );
+      setWebcamSources(videoInputDevices);
+
+      setMediaPermissionStatus("granted");
+      console.log("Media permissions granted successfully");
+    } catch (error) {
+      console.error("Failed to get media permissions:", error);
+      setMediaPermissionStatus("denied");
+    }
+  };
 
   useEffect(() => {
     if (
@@ -1252,9 +1334,36 @@ const Recorder = ({
                     </h3>
 
                     <div className="space-y-4">
+                      {mediaPermissionStatus === "denied" && (
+                        <div className="alert alert-warning">
+                          <div className="flex items-center justify-between w-full">
+                            <div>
+                              <h4 className="font-semibold">
+                                🎤 Media Permissions Needed
+                              </h4>
+                              <p className="text-sm">
+                                Allow microphone and camera access to enable
+                                audio recording and webcam overlay.
+                              </p>
+                            </div>
+                            <button
+                              className="btn btn-sm btn-primary"
+                              onClick={requestMediaPermissions}
+                            >
+                              Grant Permissions
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="form-control-modern">
                         <label className="label">
                           <span className="label-text">Audio Source</span>
+                          {mediaPermissionStatus === "denied" && (
+                            <span className="label-text-alt text-warning">
+                              Permissions needed
+                            </span>
+                          )}
                         </label>
                         <select
                           className="select select-bordered w-full focus-modern"
@@ -1266,6 +1375,7 @@ const Recorder = ({
                                 : e.target.value
                             )
                           }
+                          disabled={mediaPermissionStatus === "denied"}
                         >
                           <option value="no-audio">🔇 No Audio</option>
                           {audioSources.map((source) => (
@@ -1282,6 +1392,11 @@ const Recorder = ({
                       <div className="form-control-modern">
                         <label className="label">
                           <span className="label-text">Webcam</span>
+                          {mediaPermissionStatus === "denied" && (
+                            <span className="label-text-alt text-warning">
+                              Permissions needed
+                            </span>
+                          )}
                         </label>
                         <select
                           className="select select-bordered w-full focus-modern"
@@ -1293,6 +1408,7 @@ const Recorder = ({
                                 : e.target.value
                             )
                           }
+                          disabled={mediaPermissionStatus === "denied"}
                         >
                           <option value="no-webcam">📷 No Webcam</option>
                           {webcamSources.map((source) => (
