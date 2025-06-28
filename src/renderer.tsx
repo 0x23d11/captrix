@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import Editor from "./Editor";
+import Settings, { AppSettings, loadSettings } from "./Settings";
 import {
   FaDesktop,
   FaWindowMaximize,
@@ -28,6 +29,12 @@ const App = () => {
   const [sourceType, setSourceType] = useState<"screen" | "window" | null>(
     null
   );
+  const [showSettings, setShowSettings] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings>(() => {
+    // Load settings and apply theme immediately
+    const settings = loadSettings();
+    return settings;
+  });
 
   useEffect(() => {
     window.electronAPI.getSources().then(setAllSources);
@@ -48,11 +55,25 @@ const App = () => {
     setSelectedSource(source);
   };
 
+  const handleSettingsChange = (newSettings: AppSettings) => {
+    setAppSettings(newSettings);
+  };
+
+  if (showSettings) {
+    return (
+      <Settings
+        onBack={() => setShowSettings(false)}
+        onSettingsChange={handleSettingsChange}
+      />
+    );
+  }
+
   if (selectedSource) {
     return (
       <Recorder
         source={selectedSource}
         clearSource={() => setSelectedSource(null)}
+        settings={appSettings}
       />
     );
   }
@@ -60,6 +81,15 @@ const App = () => {
   if (!sourceType) {
     return (
       <div className="flex flex-col items-center justify-center h-screen relative overflow-hidden">
+        {/* Settings Button */}
+        <button
+          className="absolute top-6 right-6 btn btn-ghost btn-circle z-20 hover:bg-base-300/50 transition-smooth focus-modern"
+          onClick={() => setShowSettings(true)}
+          title="Settings"
+        >
+          <FaCog className="text-xl" />
+        </button>
+
         {/* Animated Background */}
         <div className="absolute inset-0 bg-gradient-to-br from-base-100 via-base-200 to-base-300 opacity-20"></div>
         <div className="absolute inset-0 opacity-30">
@@ -149,22 +179,31 @@ const App = () => {
 
       <div className="relative z-10 p-8">
         {/* Header */}
-        <div className="flex items-center mb-8">
-          <button
-            className="btn btn-ghost btn-circle mr-4 hover:bg-base-300/50 transition-smooth focus-modern"
-            onClick={() => setSourceType(null)}
-          >
-            <FaArrowLeft className="text-lg" />
-          </button>
-          <div>
-            <h1 className="text-3xl font-bold text-base-content">
-              Select a {sourceType === "screen" ? "Screen" : "Window"}
-            </h1>
-            <p className="text-base-content/70 mt-1">
-              Choose the {sourceType === "screen" ? "display" : "application"}{" "}
-              you want to record
-            </p>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center">
+            <button
+              className="btn btn-ghost btn-circle mr-4 hover:bg-base-300/50 transition-smooth focus-modern"
+              onClick={() => setSourceType(null)}
+            >
+              <FaArrowLeft className="text-lg" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-base-content">
+                Select a {sourceType === "screen" ? "Screen" : "Window"}
+              </h1>
+              <p className="text-base-content/70 mt-1">
+                Choose the {sourceType === "screen" ? "display" : "application"}{" "}
+                you want to record
+              </p>
+            </div>
           </div>
+          <button
+            className="btn btn-ghost btn-circle hover:bg-base-300/50 transition-smooth focus-modern"
+            onClick={() => setShowSettings(true)}
+            title="Settings"
+          >
+            <FaCog className="text-xl" />
+          </button>
         </div>
 
         {/* Source Grid */}
@@ -245,9 +284,11 @@ const App = () => {
 const Recorder = ({
   source,
   clearSource,
+  settings: globalSettings,
 }: {
   source: Source;
   clearSource: () => void;
+  settings: AppSettings;
 }) => {
   const [recordingState, setRecordingState] = useState<
     "idle" | "recording" | "paused" | "recorded"
@@ -270,17 +311,48 @@ const Recorder = ({
   >(null);
   const [webcamSources, setWebcamSources] = useState<MediaDeviceInfo[]>([]);
   const [selectedWebcamId, setSelectedWebcamId] = useState<string | null>(null);
-  const [autoZoomPan, setAutoZoomPan] = useState(false);
+  const [autoZoomPan, setAutoZoomPan] = useState(
+    globalSettings.recording.autoZoomEnabled
+  );
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState({
     zoomFactor: 2,
     animationDuration: 600,
     smoothing: 0.05,
-    inactivityTimeout: 2000,
-    videoQuality: "high" as "low" | "medium" | "high" | "ultra",
-    videoBitrate: 8000000, // 8 Mbps
+    inactivityTimeout: globalSettings.recording.autoZoomSensitivity * 400, // Convert sensitivity to timeout
+    videoQuality: globalSettings.recording.defaultQuality,
+    videoBitrate: getVideoBitrateForQuality(
+      globalSettings.recording.defaultQuality
+    ),
     audioBitrate: 320000, // 320 kbps
   });
+
+  // Update settings when globalSettings change
+  useEffect(() => {
+    setAutoZoomPan(globalSettings.recording.autoZoomEnabled);
+    setSettings((prev) => ({
+      ...prev,
+      inactivityTimeout: globalSettings.recording.autoZoomSensitivity * 400,
+      videoQuality: globalSettings.recording.defaultQuality,
+      videoBitrate: getVideoBitrateForQuality(
+        globalSettings.recording.defaultQuality
+      ),
+    }));
+  }, [globalSettings]);
+
+  // Helper function to get video bitrate based on quality
+  function getVideoBitrateForQuality(
+    quality: "low" | "medium" | "high" | "ultra"
+  ): number {
+    const qualityPresets = {
+      low: 1000000, // 1 Mbps
+      medium: 3000000, // 3 Mbps
+      high: 8000000, // 8 Mbps
+      ultra: 20000000, // 20 Mbps
+    };
+    return qualityPresets[quality];
+  }
+
   const [isZoomedIn, setIsZoomedIn] = useState(false);
   const cursorPositionRef = React.useRef({ x: 0, y: 0 });
   const [displays, setDisplays] = useState<Display[]>([]);
@@ -873,7 +945,13 @@ const Recorder = ({
   }, [recordingState, pauseRecording, resumeRecording]);
 
   if (showEditor && videoUrl) {
-    return <Editor videoUrl={videoUrl} onBack={() => setShowEditor(false)} />;
+    return (
+      <Editor
+        videoUrl={videoUrl}
+        onBack={() => setShowEditor(false)}
+        settings={globalSettings}
+      />
+    );
   }
 
   return (
