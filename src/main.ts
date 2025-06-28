@@ -11,6 +11,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import started from "electron-squirrel-startup";
 import { uIOhook } from "uiohook-napi";
+import { autoUpdater } from "electron-updater";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -18,6 +19,63 @@ if (started) {
 }
 
 let mainWindow: BrowserWindow | null;
+
+// Auto-updater configuration
+autoUpdater.checkForUpdatesAndNotify();
+autoUpdater.autoDownload = false; // We'll ask user first
+autoUpdater.autoInstallOnAppQuit = true;
+
+// Auto-updater event handlers
+autoUpdater.on("checking-for-update", () => {
+  console.log("Checking for update...");
+  if (mainWindow) {
+    mainWindow.webContents.send("updater-checking");
+  }
+});
+
+autoUpdater.on("update-available", (info) => {
+  console.log("Update available.", info);
+  if (mainWindow) {
+    mainWindow.webContents.send("updater-update-available", info);
+  }
+});
+
+autoUpdater.on("update-not-available", (info) => {
+  console.log("Update not available.", info);
+  if (mainWindow) {
+    mainWindow.webContents.send("updater-update-not-available", info);
+  }
+});
+
+autoUpdater.on("error", (err) => {
+  console.log("Error in auto-updater. " + err);
+  if (mainWindow) {
+    mainWindow.webContents.send("updater-error", err.message);
+  }
+});
+
+autoUpdater.on("download-progress", (progressObj) => {
+  let log_message = "Download speed: " + progressObj.bytesPerSecond;
+  log_message = log_message + " - Downloaded " + progressObj.percent + "%";
+  log_message =
+    log_message +
+    " (" +
+    progressObj.transferred +
+    "/" +
+    progressObj.total +
+    ")";
+  console.log(log_message);
+  if (mainWindow) {
+    mainWindow.webContents.send("updater-download-progress", progressObj);
+  }
+});
+
+autoUpdater.on("update-downloaded", (info) => {
+  console.log("Update downloaded");
+  if (mainWindow) {
+    mainWindow.webContents.send("updater-update-downloaded", info);
+  }
+});
 
 const sendMouseClick = (event: { x: number; y: number }) => {
   if (mainWindow) {
@@ -126,6 +184,23 @@ ipcMain.handle("save-video", async (_, buffer: ArrayBuffer) => {
   }
 });
 
+// Auto-updater IPC handlers
+ipcMain.handle("check-for-updates", async () => {
+  return await autoUpdater.checkForUpdates();
+});
+
+ipcMain.handle("download-update", async () => {
+  return await autoUpdater.downloadUpdate();
+});
+
+ipcMain.handle("quit-and-install", () => {
+  autoUpdater.quitAndInstall();
+});
+
+ipcMain.handle("get-app-version", () => {
+  return app.getVersion();
+});
+
 const createWindow = () => {
   // Create the browser window.
   mainWindow = new BrowserWindow({
@@ -170,6 +245,15 @@ app.on("ready", () => {
       mainWindow.webContents.send("global-shortcut-pause-resume-triggered");
     }
   });
+
+  // Check for updates after app is ready (only in production)
+  if (!app.isPackaged) {
+    console.log("Development mode - skipping auto-updater");
+  } else {
+    setTimeout(() => {
+      autoUpdater.checkForUpdatesAndNotify();
+    }, 5000); // Check after 5 seconds to allow app to fully load
+  }
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common

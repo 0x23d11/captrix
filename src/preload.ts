@@ -8,6 +8,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getDisplays: () => ipcRenderer.invoke("get-displays"),
   startMouseEventTracking: () => ipcRenderer.send("start-mouse-event-tracking"),
   stopMouseEventTracking: () => ipcRenderer.send("stop-mouse-event-tracking"),
+
+  // Auto-updater methods
+  checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
+  downloadUpdate: () => ipcRenderer.invoke("download-update"),
+  quitAndInstall: () => ipcRenderer.invoke("quit-and-install"),
+  getAppVersion: () => ipcRenderer.invoke("get-app-version"),
   onMouseClick: (callback: (position: { x: number; y: number }) => void) => {
     const listener = (_event: unknown, position: { x: number; y: number }) =>
       callback(position);
@@ -46,6 +52,50 @@ contextBridge.exposeInMainWorld("electronAPI", {
         "global-shortcut-pause-resume-triggered",
         listener
       );
+    };
+  },
+
+  // Auto-updater event listeners
+  onUpdaterChecking: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("updater-checking", listener);
+    return () => {
+      ipcRenderer.removeListener("updater-checking", listener);
+    };
+  },
+  onUpdaterUpdateAvailable: (callback: (info: any) => void) => {
+    const listener = (_event: unknown, info: any) => callback(info);
+    ipcRenderer.on("updater-update-available", listener);
+    return () => {
+      ipcRenderer.removeListener("updater-update-available", listener);
+    };
+  },
+  onUpdaterUpdateNotAvailable: (callback: (info: any) => void) => {
+    const listener = (_event: unknown, info: any) => callback(info);
+    ipcRenderer.on("updater-update-not-available", listener);
+    return () => {
+      ipcRenderer.removeListener("updater-update-not-available", listener);
+    };
+  },
+  onUpdaterError: (callback: (error: string) => void) => {
+    const listener = (_event: unknown, error: string) => callback(error);
+    ipcRenderer.on("updater-error", listener);
+    return () => {
+      ipcRenderer.removeListener("updater-error", listener);
+    };
+  },
+  onUpdaterDownloadProgress: (callback: (progress: any) => void) => {
+    const listener = (_event: unknown, progress: any) => callback(progress);
+    ipcRenderer.on("updater-download-progress", listener);
+    return () => {
+      ipcRenderer.removeListener("updater-download-progress", listener);
+    };
+  },
+  onUpdaterUpdateDownloaded: (callback: (info: any) => void) => {
+    const listener = (_event: unknown, info: any) => callback(info);
+    ipcRenderer.on("updater-update-downloaded", listener);
+    return () => {
+      ipcRenderer.removeListener("updater-update-downloaded", listener);
     };
   },
 });
