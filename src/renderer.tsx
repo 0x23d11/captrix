@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 import Editor from "./Editor";
 import Settings, { AppSettings, loadSettings } from "./Settings";
+import Help from "./Help";
 import {
   FaDesktop,
   FaWindowMaximize,
@@ -14,6 +15,7 @@ import {
   FaRedo,
   FaEdit,
   FaCog,
+  FaQuestionCircle,
 } from "react-icons/fa";
 
 type Source = {
@@ -30,6 +32,7 @@ const App = () => {
     null
   );
   const [showSettings, setShowSettings] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
     // Load settings - theme is already applied in loadSettings()
     const settings = loadSettings();
@@ -88,6 +91,10 @@ const App = () => {
     );
   }
 
+  if (showHelp) {
+    return <Help onBack={() => setShowHelp(false)} />;
+  }
+
   if (selectedSource) {
     return (
       <Recorder
@@ -101,14 +108,23 @@ const App = () => {
   if (!sourceType) {
     return (
       <div className="flex flex-col items-center justify-center h-screen relative overflow-hidden">
-        {/* Settings Button */}
-        <button
-          className="absolute top-6 right-6 btn btn-ghost btn-circle z-20 hover:bg-base-300/50 transition-smooth focus-modern"
-          onClick={() => setShowSettings(true)}
-          title="Settings"
-        >
-          <FaCog className="text-xl" />
-        </button>
+        {/* Top Right Buttons */}
+        <div className="absolute top-6 right-6 flex space-x-2 z-20">
+          <button
+            className="btn btn-ghost btn-circle hover:bg-base-300/50 transition-smooth focus-modern"
+            onClick={() => setShowHelp(true)}
+            title="Help & Documentation"
+          >
+            <FaQuestionCircle className="text-xl" />
+          </button>
+          <button
+            className="btn btn-ghost btn-circle hover:bg-base-300/50 transition-smooth focus-modern"
+            onClick={() => setShowSettings(true)}
+            title="Settings"
+          >
+            <FaCog className="text-xl" />
+          </button>
+        </div>
 
         {/* Animated Background */}
         <div className="absolute inset-0 bg-gradient-to-br from-base-100 via-base-200 to-base-300 opacity-20"></div>
