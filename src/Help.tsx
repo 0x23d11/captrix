@@ -149,26 +149,31 @@ const Help = ({ onBack }: HelpProps) => {
                 </div>
                 <div className="collapse-content text-sm">
                   <p className="mb-2">
-                    Choose the right quality for your needs:
+                    Choose the right encoding quality for your needs:
                   </p>
                   <ul className="list-disc list-inside space-y-1 text-base-content/70">
                     <li>
-                      <strong>Low (720p):</strong> Smaller file size, good for
+                      <strong>Low (1 Mbps):</strong> Smaller file size, good for
                       quick demos
                     </li>
                     <li>
-                      <strong>Medium (1080p):</strong> Balanced quality and file
-                      size
+                      <strong>Medium (3 Mbps):</strong> Balanced quality and
+                      file size
                     </li>
                     <li>
-                      <strong>High (1440p):</strong> Crisp quality for
+                      <strong>High (8 Mbps):</strong> Crisp quality for
                       professional content
                     </li>
                     <li>
-                      <strong>Ultra (4K):</strong> Maximum quality, large file
-                      sizes
+                      <strong>Ultra (20 Mbps):</strong> Maximum quality, large
+                      file sizes
                     </li>
                   </ul>
+                  <p className="mt-2 text-base-content/60">
+                    <strong>Note:</strong> Video resolution always matches your
+                    screen resolution. These settings only control the encoding
+                    bitrate and compression quality.
+                  </p>
                 </div>
               </div>
 

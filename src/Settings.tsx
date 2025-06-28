@@ -155,15 +155,15 @@ const Settings = ({ onBack, onSettingsChange }: SettingsProps) => {
             })
           }
         >
-          <option value="low">Low (720p, 1 Mbps)</option>
-          <option value="medium">Medium (1080p, 3 Mbps)</option>
-          <option value="high">High (1440p, 8 Mbps)</option>
-          <option value="ultra">Ultra (4K, 20 Mbps)</option>
+          <option value="low">Low (1 Mbps) - Smaller files</option>
+          <option value="medium">Medium (3 Mbps) - Balanced quality</option>
+          <option value="high">High (8 Mbps) - Crisp quality</option>
+          <option value="ultra">Ultra (20 Mbps) - Maximum quality</option>
         </select>
         <div className="label">
           <span className="label-text-alt">
-            Higher quality uses more storage space but provides better video
-            quality
+            Controls encoding bitrate and file size. Video resolution matches
+            your screen resolution.
           </span>
         </div>
       </div>

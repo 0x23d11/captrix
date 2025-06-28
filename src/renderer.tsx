@@ -1157,21 +1157,22 @@ const Recorder = ({
                           }
                         >
                           <option value="low">
-                            🔸 Low (1 Mbps) - Small files
+                            🔸 Low (1 Mbps) - Smaller files
                           </option>
                           <option value="medium">
-                            🔹 Medium (3 Mbps) - Balanced
+                            🔹 Medium (3 Mbps) - Balanced quality
                           </option>
                           <option value="high">
-                            ⭐ High (8 Mbps) - Recommended
+                            ⭐ High (8 Mbps) - Crisp quality
                           </option>
                           <option value="ultra">
-                            💎 Ultra (20 Mbps) - Best quality
+                            💎 Ultra (20 Mbps) - Maximum quality
                           </option>
                         </select>
                         <div className="text-xs text-base-content/60 mt-1">
-                          Higher quality = larger file sizes. Ultra quality
-                          recommended for professional use.
+                          Controls encoding quality and file size. Resolution
+                          matches your screen. Higher bitrate = better quality
+                          but larger files.
                         </div>
                       </div>
                     </div>
