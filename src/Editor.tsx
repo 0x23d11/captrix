@@ -27,12 +27,15 @@ type ClipRange = {
 
 type TimelineMode = "trim" | "clip";
 
+import { AppSettings } from "./Settings";
+
 type EditorProps = {
   videoUrl: string;
   onBack: () => void;
+  settings?: AppSettings;
 };
 
-const Editor = ({ videoUrl, onBack }: EditorProps) => {
+const Editor = ({ videoUrl, onBack, settings }: EditorProps) => {
   const [ffmpeg, setFfmpeg] = useState<FFmpeg | null>(null);
   const [progress, setProgress] = useState(0);
   const videoRef = useRef<VideoPlayerRef>(null);
@@ -46,7 +49,9 @@ const Editor = ({ videoUrl, onBack }: EditorProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Clipping state
-  const [timelineMode, setTimelineMode] = useState<TimelineMode>("trim");
+  const [timelineMode, setTimelineMode] = useState<TimelineMode>(
+    settings?.ui.timelineMode || "trim"
+  );
   const [clipRanges, setClipRanges] = useState<ClipRange[]>([]);
 
   // Segment management state
